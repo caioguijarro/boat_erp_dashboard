@@ -35,3 +35,6 @@
 - [x] Testes vitest para routers principais (11 testes passando)
 - [x] Checkpoint final
 - [x] Entrega ao usuário com URLs de webhook
+
+## Bugs
+- [x] Corrigir erro de query SQL: dataPedido sendo comparado com objeto Date em vez de string formatada

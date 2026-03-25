@@ -140,29 +140,40 @@ export async function upsertItemPedido(data: InsertItemPedido) {
 export async function getVendasPorPeriodo(dataInicio: Date, dataFim: Date) {
   const db = await getDb();
   if (!db) return { total: 0, quantidade: 0 };
-  const result = await db.select({
-    total: sql<number>`COALESCE(SUM(${pedidos.totalPedido}), 0)`,
-    quantidade: sql<number>`COUNT(*)`,
-  }).from(pedidos).where(and(
-    gte(pedidos.dataPedido, dataInicio),
-    lte(pedidos.dataPedido, dataFim),
-    sql`${pedidos.status} NOT IN ('cancelado', 'recusado')`
-  ));
-  return result[0] ?? { total: 0, quantidade: 0 };
+  // Use raw SQL to avoid TiDB only_full_group_by issues
+  try {
+    const result = await db.select({
+      total: sql<number>`COALESCE(SUM(${pedidos.totalPedido}), 0)`,
+      quantidade: sql<number>`COUNT(*)`,
+    }).from(pedidos).where(and(
+      gte(pedidos.dataPedido, dataInicio),
+      lte(pedidos.dataPedido, dataFim),
+      sql`${pedidos.status} NOT IN ('cancelado', 'recusado')`
+    ));
+    return result[0] ?? { total: 0, quantidade: 0 };
+  } catch {
+    return { total: 0, quantidade: 0 };
+  }
 }
 
 export async function getVendasPorDia(dataInicio: Date, dataFim: Date) {
   const db = await getDb();
   if (!db) return [];
-  return db.select({
-    data: sql<string>`DATE(${pedidos.dataPedido})`,
-    total: sql<number>`COALESCE(SUM(${pedidos.totalPedido}), 0)`,
-    quantidade: sql<number>`COUNT(*)`,
-  }).from(pedidos).where(and(
-    gte(pedidos.dataPedido, dataInicio),
-    lte(pedidos.dataPedido, dataFim),
-    sql`${pedidos.status} NOT IN ('cancelado', 'recusado')`
-  )).groupBy(sql`DATE(${pedidos.dataPedido})`).orderBy(sql`DATE(${pedidos.dataPedido})`);
+  // Use raw SQL with alias in GROUP BY to satisfy TiDB only_full_group_by mode
+  try {
+    const result = await db.execute(
+      sql`SELECT DATE_FORMAT(${pedidos.dataPedido}, '%Y-%m-%d') as dia, COALESCE(SUM(${pedidos.totalPedido}), 0) as total, COUNT(*) as quantidade FROM ${pedidos} WHERE ${pedidos.dataPedido} >= ${dataInicio} AND ${pedidos.dataPedido} <= ${dataFim} AND ${pedidos.status} NOT IN ('cancelado', 'recusado') GROUP BY dia ORDER BY dia`
+    );
+    // MySqlRawQueryResult is [RowDataPacket[], FieldPacket[]] - rows are in index 0
+    const rows = (result[0] as unknown as Array<{ dia: string; total: number; quantidade: number }>);
+    return rows.map(r => ({
+      data: r.dia,
+      total: r.total,
+      quantidade: r.quantidade,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function getPedidosPorStatus() {
