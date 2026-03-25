@@ -41,3 +41,4 @@
 - [x] Diagnosticar por que dados não aparecem no dashboard
 - [x] Implementar dados de demonstração para validar o sistema
 - [x] Adicionar endpoint de teste de webhook
+- [x] Corrigir URLs de webhook na página Webhooks para usar domínio de produção

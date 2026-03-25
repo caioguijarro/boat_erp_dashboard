@@ -37,9 +37,14 @@ const WEBHOOK_URLS = [
   { label: "URL para envio da nota fiscal", path: "/api/webhook/notas-fiscais" },
 ];
 
+const PRODUCTION_DOMAIN = "https://boatdash-mr2nrqxd.manus.space";
+
 export default function WebhookLogs() {
   const [selectedLog, setSelectedLog] = useState<number | null>(null);
-  const baseUrl = window.location.origin;
+  // Usa o domínio de produção se disponível, senão usa o origin atual
+  const baseUrl = window.location.hostname.includes("manus.space") || window.location.hostname.includes("manus.computer")
+    ? PRODUCTION_DOMAIN
+    : window.location.origin;
 
   const { data: logs, isLoading, refetch, isFetching } = trpc.webhooks.logs.useQuery({ limit: 100 }, { refetchInterval: 30000 });
 
