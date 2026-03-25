@@ -47,3 +47,12 @@
 - [x] Verificar e corrigir processamento dos payloads do Olist (formato {versao, cnpj, tipo, dados})
 - [x] Limpar dados demo do banco
 - [x] Melhorar página de Webhooks com guia passo a passo e status de integração
+
+## Integração API 2.0 Olist (Polling)
+
+- [x] Configurar Token API 2.0 do Olist como secret (OLIST_API_TOKEN)
+- [x] Implementar serviço de polling olistSync.ts com rate limit respeitado (2s entre chamadas)
+- [x] Implementar polling de pedidos a cada 5 minutos via API 2.0
+- [x] Implementar polling de produtos a cada 30 minutos via API 2.0
+- [x] Iniciar polling automático ao subir o servidor
+- [x] Validar: 18 pedidos e 10 produtos sincronizados no banco com dados reais do Olist

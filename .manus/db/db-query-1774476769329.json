@@ -1,0 +1,22 @@
+{
+  "query": "SELECT 'pedidos' as tabela, COUNT(*) as total FROM pedidos UNION ALL SELECT 'produtos', COUNT(*) FROM produtos UNION ALL SELECT 'webhook_logs', COUNT(*) FROM webhook_logs;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 37hPvM5hgZjRasX.root --database mr2NrqXdeJfrTujULAr8Kx --execute SELECT 'pedidos' as tabela, COUNT(*) as total FROM pedidos UNION ALL SELECT 'produtos', COUNT(*) FROM produtos UNION ALL SELECT 'webhook_logs', COUNT(*) FROM webhook_logs;",
+  "rows": [
+    {
+      "tabela": "produtos",
+      "total": "10"
+    },
+    {
+      "tabela": "pedidos",
+      "total": "18"
+    },
+    {
+      "tabela": "webhook_logs",
+      "total": "4"
+    }
+  ],
+  "messages": [],
+  "stdout": "tabela\ttotal\nprodutos\t10\npedidos\t18\nwebhook_logs\t4\n",
+  "stderr": "",
+  "execution_time_ms": 140
+}

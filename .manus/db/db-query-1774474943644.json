@@ -1,0 +1,28 @@
+{
+  "query": "SELECT olistId, numero, status, clienteNome FROM pedidos ORDER BY createdAt DESC LIMIT 5; SELECT tipo, evento, status, createdAt FROM webhook_logs ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 37hPvM5hgZjRasX.root --database mr2NrqXdeJfrTujULAr8Kx --execute SELECT olistId, numero, status, clienteNome FROM pedidos ORDER BY createdAt DESC LIMIT 5; SELECT tipo, evento, status, createdAt FROM webhook_logs ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "olistId": "88001",
+      "numero": "TEST-PROD-001",
+      "status": "pendente",
+      "clienteNome": "Teste Producao"
+    },
+    {
+      "olistId": "tipo",
+      "numero": "evento",
+      "status": "status",
+      "clienteNome": "createdAt"
+    },
+    {
+      "olistId": "pedido",
+      "numero": "inclusao_pedido",
+      "status": "processado",
+      "clienteNome": "2026-03-25 21:42:16"
+    }
+  ],
+  "messages": [],
+  "stdout": "olistId\tnumero\tstatus\tclienteNome\n88001\tTEST-PROD-001\tpendente\tTeste Producao\ntipo\tevento\tstatus\tcreatedAt\npedido\tinclusao_pedido\tprocessado\t2026-03-25 21:42:16\n",
+  "stderr": "",
+  "execution_time_ms": 92
+}
