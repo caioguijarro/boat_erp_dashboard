@@ -1,0 +1,28 @@
+{
+  "query": "SELECT tipo, evento, status, createdAt FROM webhook_logs ORDER BY createdAt DESC LIMIT 10",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 37hPvM5hgZjRasX.root --database mr2NrqXdeJfrTujULAr8Kx --execute SELECT tipo, evento, status, createdAt FROM webhook_logs ORDER BY createdAt DESC LIMIT 10",
+  "rows": [
+    {
+      "tipo": "pedido",
+      "evento": "atualizacao_pedido",
+      "status": "processado",
+      "createdAt": "2026-03-25 21:24:12"
+    },
+    {
+      "tipo": "produto",
+      "evento": "atualizado",
+      "status": "processado",
+      "createdAt": "2026-03-25 21:22:01"
+    },
+    {
+      "tipo": "pedido",
+      "evento": "inclusao_pedido",
+      "status": "processado",
+      "createdAt": "2026-03-25 21:21:54"
+    }
+  ],
+  "messages": [],
+  "stdout": "tipo\tevento\tstatus\tcreatedAt\npedido\tatualizacao_pedido\tprocessado\t2026-03-25 21:24:12\nproduto\tatualizado\tprocessado\t2026-03-25 21:22:01\npedido\tinclusao_pedido\tprocessado\t2026-03-25 21:21:54\n",
+  "stderr": "",
+  "execution_time_ms": 54
+}

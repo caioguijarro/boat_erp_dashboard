@@ -43,3 +43,7 @@
 - [x] Adicionar endpoint de teste de webhook
 - [x] Corrigir URLs de webhook na página Webhooks para usar domínio de produção
 - [x] Diagnosticar e corrigir botão de dados demo que não está populando o banco
+- [x] Testar recebimento real de webhooks do Olist no servidor de produção
+- [x] Verificar e corrigir processamento dos payloads do Olist (formato {versao, cnpj, tipo, dados})
+- [x] Limpar dados demo do banco
+- [x] Melhorar página de Webhooks com guia passo a passo e status de integração

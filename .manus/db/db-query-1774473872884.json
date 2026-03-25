@@ -1,0 +1,27 @@
+{
+  "query": "SELECT olistId, numero, status, clienteNome, dataPedido FROM pedidos ORDER BY createdAt DESC LIMIT 5; SELECT olistId, nome, estoqueAtual FROM produtos ORDER BY createdAt DESC LIMIT 5;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 37hPvM5hgZjRasX.root --database mr2NrqXdeJfrTujULAr8Kx --execute SELECT olistId, numero, status, clienteNome, dataPedido FROM pedidos ORDER BY createdAt DESC LIMIT 5; SELECT olistId, nome, estoqueAtual FROM produtos ORDER BY createdAt DESC LIMIT 5;",
+  "rows": [
+    {
+      "olistId": "999001",
+      "numero": "BOAT-TEST-001",
+      "status": "entregue",
+      "clienteNome": "Cliente Teste Real",
+      "dataPedido": "2026-03-25 00:00:00"
+    },
+    {
+      "olistId": "123456",
+      "numero": "P-2026-001",
+      "status": "aprovado",
+      "clienteNome": "João Silva",
+      "dataPedido": "2026-03-25 00:00:00"
+    }
+  ],
+  "messages": [
+    "olistId\tnome\testoqueAtual",
+    "1001\tBOAT Lager 350ml\t240.00"
+  ],
+  "stdout": "olistId\tnumero\tstatus\tclienteNome\tdataPedido\n999001\tBOAT-TEST-001\tentregue\tCliente Teste Real\t2026-03-25 00:00:00\n123456\tP-2026-001\taprovado\tJoão Silva\t2026-03-25 00:00:00\nolistId\tnome\testoqueAtual\n1001\tBOAT Lager 350ml\t240.00\n",
+  "stderr": "",
+  "execution_time_ms": 65
+}

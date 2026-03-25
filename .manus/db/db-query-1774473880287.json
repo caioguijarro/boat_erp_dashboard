@@ -1,0 +1,9 @@
+{
+  "query": "DELETE FROM webhook_logs; DELETE FROM itens_pedido; DELETE FROM pedidos; DELETE FROM produtos; DELETE FROM contas_receber; DELETE FROM contas_pagar; DELETE FROM notas_fiscais; DELETE FROM expedicoes;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway05.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 37hPvM5hgZjRasX.root --database mr2NrqXdeJfrTujULAr8Kx --execute DELETE FROM webhook_logs; DELETE FROM itens_pedido; DELETE FROM pedidos; DELETE FROM produtos; DELETE FROM contas_receber; DELETE FROM contas_pagar; DELETE FROM notas_fiscais; DELETE FROM expedicoes;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 103
+}
