@@ -38,3 +38,6 @@
 
 ## Bugs
 - [x] Corrigir erro de query SQL: dataPedido sendo comparado com objeto Date em vez de string formatada
+- [x] Diagnosticar por que dados não aparecem no dashboard
+- [x] Implementar dados de demonstração para validar o sistema
+- [x] Adicionar endpoint de teste de webhook

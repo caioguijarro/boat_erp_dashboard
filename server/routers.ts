@@ -10,6 +10,8 @@ import {
   getContasReceber, getTotalContasReceber,
   getContasPagar, getTotalContasPagar,
   getWebhookLogs, getResumoEstoque,
+  upsertProduto, upsertPedido, upsertItemPedido, upsertContaReceber, upsertContaPagar, insertWebhookLog,
+  getDb,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
@@ -151,6 +153,105 @@ export const appRouter = router({
     logs: protectedProcedure
       .input(z.object({ limit: z.number().min(1).max(200).default(50) }))
       .query(async ({ input }) => getWebhookLogs(input.limit)),
+  }),
+
+  // ─── Demo / Seed ─────────────────────────────────────────────────────────
+  demo: router({
+    seed: protectedProcedure.mutation(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB não disponível");
+
+      // Limpar dados existentes
+      await db.execute("DELETE FROM itens_pedido");
+      await db.execute("DELETE FROM pedidos");
+      await db.execute("DELETE FROM produtos");
+      await db.execute("DELETE FROM contas_receber");
+      await db.execute("DELETE FROM contas_pagar");
+      await db.execute("DELETE FROM webhook_logs");
+
+      // Produtos Boat Beer
+      const produtosList = [
+        { olistId: "P001", nome: "Boat Beer Lager 350ml", sku: "BOAT-LAGER-350", categoria: "Cerveja", preco: "12.90", estoqueAtual: "480", estoqueMinimo: "100", ativo: "S" as const },
+        { olistId: "P002", nome: "Boat Beer IPA 473ml", sku: "BOAT-IPA-473", categoria: "Cerveja", preco: "18.90", estoqueAtual: "35", estoqueMinimo: "80", ativo: "S" as const },
+        { olistId: "P003", nome: "Boat Beer Weiss 500ml", sku: "BOAT-WEISS-500", categoria: "Cerveja", preco: "16.90", estoqueAtual: "0", estoqueMinimo: "60", ativo: "S" as const },
+        { olistId: "P004", nome: "Boat Beer Pack 6un Lager", sku: "BOAT-PACK6-LAGER", categoria: "Pack", preco: "69.90", estoqueAtual: "120", estoqueMinimo: "30", ativo: "S" as const },
+        { olistId: "P005", nome: "Boat Beer Pack 12un Lager", sku: "BOAT-PACK12-LAGER", categoria: "Pack", preco: "129.90", estoqueAtual: "55", estoqueMinimo: "20", ativo: "S" as const },
+        { olistId: "P006", nome: "Copo Boat Beer 500ml", sku: "BOAT-COPO-500", categoria: "Acessórios", preco: "29.90", estoqueAtual: "200", estoqueMinimo: "50", ativo: "S" as const },
+        { olistId: "P007", nome: "Camiseta Boat Beer P", sku: "BOAT-CAMISA-P", categoria: "Vestuário", preco: "89.90", estoqueAtual: "15", estoqueMinimo: "20", ativo: "S" as const },
+        { olistId: "P008", nome: "Boat Beer Sem Álcool 350ml", sku: "BOAT-SA-350", categoria: "Cerveja", preco: "10.90", estoqueAtual: "320", estoqueMinimo: "80", ativo: "S" as const },
+      ];
+      for (const p of produtosList) await upsertProduto(p);
+
+      // Pedidos dos últimos 30 dias
+      const statusList = ["aprovado", "aprovado", "aprovado", "em_separacao", "enviado", "entregue", "entregue", "pendente", "cancelado"];
+      const clientes = ["João Silva", "Maria Santos", "Pedro Alves", "Ana Costa", "Carlos Lima", "Fernanda Rocha", "Bruno Martins", "Juliana Ferreira", "Ricardo Souza", "Camila Oliveira"];
+      const pedidosIds: number[] = [];
+
+      for (let i = 0; i < 45; i++) {
+        const diasAtras = Math.floor(Math.random() * 30);
+        const dataPedido = new Date();
+        dataPedido.setDate(dataPedido.getDate() - diasAtras);
+        const status = statusList[Math.floor(Math.random() * statusList.length)];
+        const cliente = clientes[Math.floor(Math.random() * clientes.length)];
+        const total = (Math.random() * 400 + 50).toFixed(2);
+        const numero = `BOAT-${String(2026001 + i).padStart(6, "0")}`;
+
+        await upsertPedido({
+          olistId: `PED${1000 + i}`,
+          numero,
+          status,
+          clienteNome: cliente,
+          clienteEmail: `${cliente.toLowerCase().replace(" ", ".")}@email.com`,
+          dataPedido,
+          totalPedido: total,
+          totalFrete: (Math.random() * 30).toFixed(2),
+          totalDesconto: "0.00",
+          canal: ["Shopee", "Mercado Livre", "Site Próprio", "Instagram"][Math.floor(Math.random() * 4)],
+        });
+
+        // Buscar o ID do pedido inserido
+        const pedidosDb = await getPedidos({ limit: 1, offset: 0 });
+        if (pedidosDb.length > 0 && pedidosDb[0].id) pedidosIds.push(pedidosDb[0].id);
+      }
+
+      // Contas a Receber
+      const contasReceberList = [
+        { olistId: "CR001", descricao: "Pedido BOAT-2026001", valor: "1250.00", dataVencimento: new Date(Date.now() + 5*24*60*60*1000), status: "aberto" as const },
+        { olistId: "CR002", descricao: "Pedido BOAT-2026002", valor: "890.50", dataVencimento: new Date(Date.now() + 12*24*60*60*1000), status: "aberto" as const },
+        { olistId: "CR003", descricao: "Pedido BOAT-2026003", valor: "2100.00", dataVencimento: new Date(Date.now() - 3*24*60*60*1000), status: "vencido" as const },
+        { olistId: "CR004", descricao: "Pedido BOAT-2026004", valor: "450.00", dataVencimento: new Date(Date.now() - 10*24*60*60*1000), status: "vencido" as const },
+        { olistId: "CR005", descricao: "Pedido BOAT-2026005", valor: "3200.00", dataVencimento: new Date(Date.now() - 30*24*60*60*1000), status: "recebido" as const, valorRecebido: "3200.00", dataRecebimento: new Date(Date.now() - 28*24*60*60*1000) },
+        { olistId: "CR006", descricao: "Pedido BOAT-2026006", valor: "780.00", dataVencimento: new Date(Date.now() + 20*24*60*60*1000), status: "aberto" as const },
+      ];
+      for (const c of contasReceberList) await upsertContaReceber(c);
+
+      // Contas a Pagar
+      const contasPagarList = [
+        { olistId: "CP001", descricao: "Fornecedor Malte Premium", valor: "4500.00", dataVencimento: new Date(Date.now() + 8*24*60*60*1000), status: "aberto" as const },
+        { olistId: "CP002", descricao: "Aluguel Galpão Santos", valor: "3200.00", dataVencimento: new Date(Date.now() + 15*24*60*60*1000), status: "aberto" as const },
+        { olistId: "CP003", descricao: "Fornecedor Lúpulo", valor: "1800.00", dataVencimento: new Date(Date.now() - 5*24*60*60*1000), status: "vencido" as const },
+        { olistId: "CP004", descricao: "Energia Elétrica", valor: "920.00", dataVencimento: new Date(Date.now() - 2*24*60*60*1000), status: "vencido" as const },
+        { olistId: "CP005", descricao: "Fornecedor Embalagens", valor: "2100.00", dataVencimento: new Date(Date.now() - 20*24*60*60*1000), status: "pago" as const, valorPago: "2100.00", dataPagamento: new Date(Date.now() - 18*24*60*60*1000) },
+      ];
+      for (const c of contasPagarList) await upsertContaPagar(c);
+
+      // Log de webhook de demonstração
+      await insertWebhookLog({ tipo: "pedidos", payload: JSON.stringify({ evento: "seed_demo", mensagem: "Dados de demonstração carregados" }), status: "processado" });
+
+      return { sucesso: true, mensagem: "Dados de demonstração carregados com sucesso!" };
+    }),
+
+    limpar: protectedProcedure.mutation(async () => {
+      const db = await getDb();
+      if (!db) throw new Error("DB não disponível");
+      await db.execute("DELETE FROM itens_pedido");
+      await db.execute("DELETE FROM pedidos");
+      await db.execute("DELETE FROM produtos");
+      await db.execute("DELETE FROM contas_receber");
+      await db.execute("DELETE FROM contas_pagar");
+      await db.execute("DELETE FROM webhook_logs");
+      return { sucesso: true, mensagem: "Dados limpos com sucesso!" };
+    }),
   }),
 
   // ─── Insights LLM ────────────────────────────────────────────────────────

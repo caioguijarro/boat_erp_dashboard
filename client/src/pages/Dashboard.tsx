@@ -7,11 +7,12 @@ import {
 } from "recharts";
 import {
   TrendingUp, ShoppingCart, Package, DollarSign,
-  AlertTriangle, CheckCircle, Clock, XCircle, RefreshCw
+  AlertTriangle, CheckCircle, Clock, XCircle, RefreshCw, FlaskConical, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
+import { toast } from "sonner";
 
 const STATUS_COLORS: Record<string, string> = {
   pendente: "#f59e0b",
@@ -69,10 +70,29 @@ function MetricCard({
 
 export default function Dashboard() {
   const [diasGrafico, setDiasGrafico] = useState(30);
+  const utils = trpc.useUtils();
   const { data: metricas, isLoading: loadingMetricas, refetch } = trpc.dashboard.metricas.useQuery(undefined, {
     refetchInterval: 60000,
   });
   const { data: grafico, isLoading: loadingGrafico } = trpc.dashboard.graficoVendas.useQuery({ dias: diasGrafico });
+
+  const seedMutation = trpc.demo.seed.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.mensagem);
+      utils.dashboard.metricas.invalidate();
+      utils.dashboard.graficoVendas.invalidate();
+    },
+    onError: (e) => toast.error("Erro ao carregar dados: " + e.message),
+  });
+
+  const limparMutation = trpc.demo.limpar.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.mensagem);
+      utils.dashboard.metricas.invalidate();
+      utils.dashboard.graficoVendas.invalidate();
+    },
+    onError: (e) => toast.error("Erro ao limpar dados: " + e.message),
+  });
 
   const pedidosPorStatusData = metricas?.pedidosPorStatus?.map(p => ({
     name: STATUS_LABELS[p.status ?? ""] ?? p.status ?? "Outro",
@@ -97,10 +117,36 @@ export default function Dashboard() {
               Visão geral das operações · Atualiza a cada 60s
             </p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
-            <RefreshCw className="h-3.5 w-3.5" />
-            Atualizar
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetch()} className="gap-2">
+              <RefreshCw className="h-3.5 w-3.5" />
+              Atualizar
+            </Button>
+            {(metricas?.quantidadeMes === 0) && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => seedMutation.mutate()}
+                disabled={seedMutation.isPending}
+                className="gap-2 border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+              >
+                <FlaskConical className="h-3.5 w-3.5" />
+                {seedMutation.isPending ? "Carregando..." : "Carregar Dados Demo"}
+              </Button>
+            )}
+            {(metricas?.quantidadeMes ?? 0) > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => limparMutation.mutate()}
+                disabled={limparMutation.isPending}
+                className="gap-2 border-red-500/30 text-red-400/70 hover:bg-red-500/10 text-xs"
+              >
+                <Trash2 className="h-3 w-3" />
+                Limpar Demo
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Metric Cards */}
