@@ -11,6 +11,10 @@ import Estoque from "./pages/Estoque";
 import Financeiro from "./pages/Financeiro";
 import Insights from "./pages/Insights";
 import WebhookLogs from "./pages/WebhookLogs";
+import Vendas from "./pages/Vendas";
+import Vendedores from "./pages/Vendedores";
+import Inadimplencia from "./pages/Inadimplencia";
+import Clientes from "./pages/Clientes";
 
 function Router() {
   return (
@@ -22,6 +26,10 @@ function Router() {
       <Route path={"/financeiro"} component={Financeiro} />
       <Route path={"/insights"} component={Insights} />
       <Route path={"/webhooks"} component={WebhookLogs} />
+      <Route path={"/vendas"} component={Vendas} />
+      <Route path={"/vendedores"} component={Vendedores} />
+      <Route path={"/inadimplencia"} component={Inadimplencia} />
+      <Route path={"/clientes"} component={Clientes} />
       <Route path={"/404"} component={NotFound} />
       <Route component={NotFound} />
     </Switch>

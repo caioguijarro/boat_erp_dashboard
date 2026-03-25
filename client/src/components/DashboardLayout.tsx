@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BarChart3, Beer, DollarSign, LayoutDashboard, LogOut, Package, PanelLeft, ShoppingCart, Webhook, Zap } from "lucide-react";
+import { BarChart3, Beer, DollarSign, LayoutDashboard, LogOut, Package, PanelLeft, ShoppingCart, Webhook, Zap, TrendingUp, Users, AlertTriangle, UserCheck } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -30,6 +30,10 @@ import { Button } from "./ui/button";
 const menuItems = [
   { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
   { icon: ShoppingCart, label: "Pedidos", path: "/pedidos" },
+  { icon: TrendingUp, label: "Vendas", path: "/vendas" },
+  { icon: Users, label: "Vendedores", path: "/vendedores" },
+  { icon: AlertTriangle, label: "Inadimplência", path: "/inadimplencia" },
+  { icon: UserCheck, label: "Clientes", path: "/clientes" },
   { icon: Package, label: "Estoque", path: "/estoque" },
   { icon: DollarSign, label: "Financeiro", path: "/financeiro" },
   { icon: Zap, label: "Insights IA", path: "/insights" },

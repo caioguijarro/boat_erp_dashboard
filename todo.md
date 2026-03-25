@@ -56,3 +56,35 @@
 - [x] Implementar polling de produtos a cada 30 minutos via API 2.0
 - [x] Iniciar polling automático ao subir o servidor
 - [x] Validar: 18 pedidos e 10 produtos sincronizados no banco com dados reais do Olist
+
+## Módulos Analíticos v2
+
+### Banco de Dados
+- [x] Tabela `metas`: meta mensal geral (ano, mês, valor)
+- [x] Tabela `vendedores`: cadastro com % comissão fixa e meta individual mensal
+- [x] Tabela `comissoes_pagas`: controle de períodos de comissão pagos/pendentes por vendedor
+- [x] Adicionar campos ao pedido: clienteNome, clienteCpfCnpj, situacao, canal, vendedor_id, vendedor_nome
+- [x] Migrar schema com pnpm db:push
+
+### Polling Olist
+- [x] Expandir histórico para 90 dias no primeiro sync
+- [x] Buscar detalhes completos de cada pedido (cliente, vendedor, situação)
+- [x] Salvar situação e dados de pagamento
+
+### Backend tRPC
+- [x] Procedure: vendas por dia com meta proporcional (gráfico tendência)
+- [x] Procedure: ranking de vendedores (valor, meta, % atingido, comissão calculada)
+- [x] Procedure: comissões por período (pago/pendente por vendedor)
+- [x] Procedure: inadimplência (entregue + não pago, agrupado por vendedor)
+- [x] Procedure: top 10 clientes por valor no período
+- [x] Procedure: conciliação (entregues vs. pagos)
+- [x] Procedure: CRUD de metas mensais
+- [x] Procedure: CRUD de vendedores (comissão, meta)
+- [x] Procedure: marcar período de comissão como pago
+
+### Frontend
+- [x] Página Vendas: gráfico tendência diária + linha de meta + seletor de mês
+- [x] Página Vendedores: ranking com barra de progresso, comissão calculada, status de pagamento por período
+- [x] Página Inadimplência: tabela por vendedor com valor em aberto e dias de atraso + classificação de risco
+- [x] Página Clientes: top 10 + conciliação entregues vs pagos
+- [x] Sidebar atualizado com novos itens de navegação

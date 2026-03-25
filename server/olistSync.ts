@@ -1,12 +1,15 @@
 /**
  * Olist API 2.0 Sync Service
  * Polls the Olist ERP API to keep local database in sync.
- * - Pedidos: every 5 minutes (recent 30 days)
+ * - Pedidos: every 5 minutes (recent 2 days in normal cycle, 90 days on first run)
  * - Produtos: every 30 minutes (all active products)
- * - Contas a Receber: every 15 minutes
+ * - Vendedores: synced from pedidos automatically
  */
 
 import { upsertProduto, upsertPedido, upsertItemPedido, insertWebhookLog } from "./db";
+import { getDb } from "./db";
+import { vendedores } from "../drizzle/schema";
+import { eq } from "drizzle-orm";
 
 const OLIST_API_BASE = "https://api.tiny.com.br/api2";
 const TOKEN = process.env.OLIST_API_TOKEN;
@@ -15,7 +18,6 @@ const TOKEN = process.env.OLIST_API_TOKEN;
 
 function parseOlistDate(dateStr: string | null | undefined): Date | null {
   if (!dateStr) return null;
-  // Format: "dd/mm/yyyy" or "dd/mm/yyyy hh:mm:ss"
   const parts = dateStr.split(" ");
   const dateParts = parts[0].split("/");
   if (dateParts.length !== 3) return null;
@@ -30,6 +32,7 @@ function mapSituacao(situacao: string): string {
     "Aprovado": "aprovado",
     "Preparando envio": "em_andamento",
     "Faturado (atendido)": "faturado",
+    "Faturado": "faturado",
     "Pronto para envio": "em_andamento",
     "Enviado": "enviado",
     "Entregue": "entregue",
@@ -55,7 +58,24 @@ async function olistPost(endpoint: string, params: Record<string, string>): Prom
   return data?.retorno;
 }
 
-// ─── Sync Pedidos ─────────────────────────────────────────────────────────────
+// ─── Sync Vendedores ──────────────────────────────────────────────────────────
+
+async function upsertVendedor(olistId: string, nome: string): Promise<void> {
+  if (!olistId || !nome) return;
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.select().from(vendedores).where(eq(vendedores.olistId, olistId)).limit(1);
+  if (existing.length === 0) {
+    await db.insert(vendedores).values({
+      olistId,
+      nome,
+      comissaoPerc: "0",
+      ativo: "S",
+    });
+  }
+}
+
+// ─── Sync Pedido Detalhes ─────────────────────────────────────────────────────
 
 async function syncPedidoDetalhes(olistId: string): Promise<void> {
   try {
@@ -65,7 +85,21 @@ async function syncPedidoDetalhes(olistId: string): Promise<void> {
 
     const dataPedido = parseOlistDate(p.data_pedido);
     const dataEntrega = parseOlistDate(p.data_entrega);
-    const dataFaturamento = parseOlistDate(p.data_faturamento);
+
+    // Sync vendedor if present
+    if (p.id_vendedor && p.nome_vendedor) {
+      await upsertVendedor(String(p.id_vendedor), p.nome_vendedor);
+    }
+
+    // Determine payment status from parcelas
+    // Inadimplente = situacao "Entregue" but no confirmed payment
+    const parcelas = Array.isArray(p.parcelas) ? p.parcelas : [];
+    const primeiraParcela = parcelas[0]?.parcela;
+    const dataPrevPagamento = primeiraParcela?.data ? parseOlistDate(primeiraParcela.data) : null;
+
+    // Check if payment is confirmed via pagamentos_integrados
+    const pagamentosIntegrados = Array.isArray(p.pagamentos_integrados) ? p.pagamentos_integrados : [];
+    const pagamentoConfirmado = pagamentosIntegrados.length > 0;
 
     await upsertPedido({
       olistId: String(p.id),
@@ -81,10 +115,18 @@ async function syncPedidoDetalhes(olistId: string): Promise<void> {
       totalFrete: p.valor_frete ? String(p.valor_frete) : "0",
       totalDesconto: p.valor_desconto ? String(p.valor_desconto) : "0",
       formaPagamento: p.forma_pagamento || null,
+      canal: p.id_vendedor ? `vendedor:${p.id_vendedor}:${p.nome_vendedor}` : null,
       dataPedido: dataPedido || undefined,
       dataPrevEntrega: dataEntrega || undefined,
       observacoes: p.obs || null,
-      rawData: JSON.stringify(p),
+      rawData: JSON.stringify({
+        ...p,
+        _vendedor_id: p.id_vendedor,
+        _vendedor_nome: p.nome_vendedor,
+        _pagamento_confirmado: pagamentoConfirmado,
+        _data_prev_pagamento: primeiraParcela?.data || null,
+        _forma_pagamento: p.forma_pagamento,
+      }),
     });
 
     // Sync itens do pedido
@@ -92,34 +134,35 @@ async function syncPedidoDetalhes(olistId: string): Promise<void> {
     for (const itemWrapper of itens) {
       const item = itemWrapper?.item;
       if (!item) continue;
-      // itensPedido uses pedidoId (int FK), not olistId
-      // We'll insert directly with product info
       await upsertItemPedido({
-        pedidoId: 0, // will be resolved by upsertItemPedido via olistId lookup
+        pedidoId: 0,
         produtoNome: item.descricao || null,
         produtoCodigo: item.codigo || null,
         quantidade: item.quantidade ? String(item.quantidade) : "1",
         valorUnitario: item.valor_unitario ? String(item.valor_unitario) : "0",
         valorTotal: item.quantidade && item.valor_unitario
-          ? String(parseFloat(item.quantidade) * parseFloat(item.valor_unitario))
+          ? String(parseFloat(String(item.quantidade)) * parseFloat(String(item.valor_unitario)))
           : "0",
         desconto: "0",
       });
     }
   } catch (err) {
     console.error(`[OlistSync] Error syncing pedido ${olistId}:`, err);
+    throw err;
   }
 }
 
-export async function syncPedidos(diasAtras = 30): Promise<{ synced: number; errors: number }> {
+// ─── Sync Pedidos ─────────────────────────────────────────────────────────────
+
+export async function syncPedidos(diasAtras = 2): Promise<{ synced: number; errors: number }> {
   if (!TOKEN) { console.warn("[OlistSync] OLIST_API_TOKEN not set, skipping pedidos sync"); return { synced: 0, errors: 0 }; }
-  
+
   const hoje = new Date();
   const inicio = new Date(hoje);
   inicio.setDate(inicio.getDate() - diasAtras);
-  
+
   const fmt = (d: Date) => `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-  
+
   let synced = 0;
   let errors = 0;
   let pagina = 1;
@@ -141,14 +184,18 @@ export async function syncPedidos(diasAtras = 30): Promise<{ synced: number; err
       for (const pedidoWrapper of pedidosList) {
         const pedido = pedidoWrapper?.pedido;
         if (!pedido?.id) continue;
-        await syncPedidoDetalhes(String(pedido.id));
-        synced++;
-        // Small delay to respect rate limits (30 req/min = 1 req per 2s)
-        await new Promise(r => setTimeout(r, 300));
+        try {
+          await syncPedidoDetalhes(String(pedido.id));
+          synced++;
+        } catch {
+          errors++;
+        }
+        // Respect rate limit: 30 req/min = 1 req per 2s
+        await new Promise(r => setTimeout(r, 2_000));
       }
 
       pagina++;
-    } while (pagina <= totalPaginas && pagina <= 5); // Max 5 pages per cycle
+    } while (pagina <= totalPaginas && pagina <= 10);
 
     console.log(`[OlistSync] Pedidos sync complete: ${synced} synced, ${errors} errors`);
     await insertWebhookLog({
@@ -188,7 +235,7 @@ export async function syncProdutos(): Promise<{ synced: number; errors: number }
     do {
       const retorno = await olistPost("produtos.pesquisa.php", {
         pagina: String(pagina),
-        situacao: "A", // only active products
+        situacao: "A",
       });
 
       totalPaginas = parseInt(retorno?.numero_paginas || "1");
@@ -199,8 +246,6 @@ export async function syncProdutos(): Promise<{ synced: number; errors: number }
         if (!p?.id) continue;
 
         try {
-          // Use list data directly to avoid extra API calls per product
-          // This respects the 30 req/min rate limit
           await upsertProduto({
             olistId: String(p.id),
             codigo: p.codigo || null,
@@ -214,7 +259,6 @@ export async function syncProdutos(): Promise<{ synced: number; errors: number }
             ativo: p.situacao === "A" ? "S" : "N",
           });
           synced++;
-          // 2 seconds between calls = max 30 req/min
           await new Promise(r => setTimeout(r, 2_000));
         } catch (err) {
           errors++;
@@ -223,7 +267,7 @@ export async function syncProdutos(): Promise<{ synced: number; errors: number }
       }
 
       pagina++;
-    } while (pagina <= totalPaginas && pagina <= 3); // Max 3 pages per cycle
+    } while (pagina <= totalPaginas && pagina <= 3);
 
     console.log(`[OlistSync] Produtos sync complete: ${synced} synced, ${errors} errors`);
     await insertWebhookLog({
@@ -260,17 +304,17 @@ export function startOlistPolling() {
 
   console.log("[OlistSync] Starting polling scheduler...");
 
-  // Run immediately on startup
-  setTimeout(() => syncPedidos(7), 5_000);   // last 7 days on startup
-  setTimeout(() => syncProdutos(), 10_000);   // products on startup
+  // First run: sync 90 days of history
+  setTimeout(() => syncPedidos(90), 5_000);
+  setTimeout(() => syncProdutos(), 15_000);
 
-  // Pedidos every 5 minutes
+  // Pedidos every 5 minutes (last 2 days)
   pedidosTimer = setInterval(() => syncPedidos(2), 5 * 60 * 1000);
 
   // Produtos every 30 minutes
   produtosTimer = setInterval(() => syncProdutos(), 30 * 60 * 1000);
 
-  console.log("[OlistSync] Polling scheduled: pedidos every 5min, produtos every 30min");
+  console.log("[OlistSync] Polling scheduled: pedidos every 5min (90d on startup), produtos every 30min");
 }
 
 export function stopOlistPolling() {

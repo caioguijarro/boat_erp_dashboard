@@ -176,6 +176,53 @@ export const contasPagar = mysqlTable("contas_pagar", {
 export type ContaPagar = typeof contasPagar.$inferSelect;
 export type InsertContaPagar = typeof contasPagar.$inferInsert;
 
+// ─── Vendedores ─────────────────────────────────────────────────────────────
+export const vendedores = mysqlTable("vendedores", {
+  id: int("id").autoincrement().primaryKey(),
+  olistId: varchar("olistId", { length: 64 }).unique(),
+  nome: varchar("nome", { length: 256 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  comissaoPerc: decimal("comissaoPerc", { precision: 5, scale: 2 }).default("0"), // % fixo de comissão
+  ativo: mysqlEnum("ativo", ["S", "N"]).default("S"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Vendedor = typeof vendedores.$inferSelect;
+export type InsertVendedor = typeof vendedores.$inferInsert;
+
+// ─── Metas Mensais ───────────────────────────────────────────────────────────
+export const metas = mysqlTable("metas", {
+  id: int("id").autoincrement().primaryKey(),
+  ano: int("ano").notNull(),
+  mes: int("mes").notNull(), // 1-12
+  vendedorId: int("vendedorId"), // null = meta geral da empresa
+  valorMeta: decimal("valorMeta", { precision: 12, scale: 2 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Meta = typeof metas.$inferSelect;
+export type InsertMeta = typeof metas.$inferInsert;
+
+// ─── Comissões Pagas ─────────────────────────────────────────────────────────
+export const comissoesPagas = mysqlTable("comissoes_pagas", {
+  id: int("id").autoincrement().primaryKey(),
+  vendedorId: int("vendedorId").notNull(),
+  ano: int("ano").notNull(),
+  mes: int("mes").notNull(), // 1-12
+  valorComissao: decimal("valorComissao", { precision: 10, scale: 2 }).notNull(),
+  valorVendas: decimal("valorVendas", { precision: 12, scale: 2 }).notNull(),
+  pago: mysqlEnum("pago", ["S", "N"]).default("N"),
+  dataPagamento: timestamp("dataPagamento"),
+  observacoes: text("observacoes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type ComissaoPaga = typeof comissoesPagas.$inferSelect;
+export type InsertComissaoPaga = typeof comissoesPagas.$inferInsert;
+
 // ─── Logs de Webhooks ────────────────────────────────────────────────────────
 export const webhookLogs = mysqlTable("webhook_logs", {
   id: int("id").autoincrement().primaryKey(),

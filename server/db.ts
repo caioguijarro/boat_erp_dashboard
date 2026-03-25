@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, lte, sql, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, produtos, pedidos, itensPedido, notasFiscais, expedicoes, contasReceber, contasPagar, webhookLogs } from "../drizzle/schema";
-import type { InsertProduto, InsertPedido, InsertItemPedido, InsertNotaFiscal, InsertExpedicao, InsertContaReceber, InsertContaPagar, InsertWebhookLog } from "../drizzle/schema";
+import { InsertUser, users, produtos, pedidos, itensPedido, notasFiscais, expedicoes, contasReceber, contasPagar, webhookLogs, vendedores, metas, comissoesPagas } from "../drizzle/schema";
+import type { InsertProduto, InsertPedido, InsertItemPedido, InsertNotaFiscal, InsertExpedicao, InsertContaReceber, InsertContaPagar, InsertWebhookLog, InsertVendedor, InsertMeta, InsertComissaoPaga } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -311,4 +311,213 @@ export async function getResumoEstoque() {
     db.select({ count: sql<number>`COUNT(*)` }).from(produtos).where(sql`${produtos.estoqueAtual} = 0 AND ${produtos.ativo} = 'S'`),
   ]);
   return { total: total[0]?.count ?? 0, baixoEstoque: baixo[0]?.count ?? 0, semEstoque: sem[0]?.count ?? 0 };
+}
+
+// ─── Vendedores ───────────────────────────────────────────────────────────────
+
+export async function getVendedores() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(vendedores).where(eq(vendedores.ativo, "S")).orderBy(vendedores.nome);
+}
+
+export async function upsertVendedor(data: InsertVendedor) {
+  const db = await getDb();
+  if (!db) return;
+  if (data.olistId) {
+    await db.insert(vendedores).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+  } else {
+    await db.insert(vendedores).values(data);
+  }
+}
+
+export async function updateVendedorComissao(id: number, comissaoPerc: string) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(vendedores).set({ comissaoPerc, updatedAt: new Date() }).where(eq(vendedores.id, id));
+}
+
+// ─── Metas ────────────────────────────────────────────────────────────────────
+export async function getMetas(ano?: number, mes?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (ano) conditions.push(eq(metas.ano, ano));
+  if (mes) conditions.push(eq(metas.mes, mes));
+  return db.select().from(metas).where(conditions.length ? and(...conditions) : undefined).orderBy(metas.ano, metas.mes);
+}
+
+export async function upsertMeta(data: InsertMeta) {
+  const db = await getDb();
+  if (!db) return;
+  // Upsert by ano+mes+vendedorId
+  const vendedorIdVal = data.vendedorId ?? null;
+  const existing = await db.execute(
+    sql`SELECT id FROM metas WHERE ano = ${data.ano} AND mes = ${data.mes} AND ${vendedorIdVal === null ? sql`vendedorId IS NULL` : sql`vendedorId = ${vendedorIdVal}`} LIMIT 1`
+  );
+  const rows = (existing[0] as unknown as Array<{ id: number }>);
+  if (rows.length > 0) {
+    await db.update(metas).set({ valorMeta: data.valorMeta, updatedAt: new Date() }).where(eq(metas.id, rows[0].id));
+  } else {
+    await db.insert(metas).values(data);
+  }
+}
+
+// ─── Comissões Pagas ──────────────────────────────────────────────────────────
+export async function getComissoesPagas(vendedorId?: number, ano?: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (vendedorId) conditions.push(eq(comissoesPagas.vendedorId, vendedorId));
+  if (ano) conditions.push(eq(comissoesPagas.ano, ano));
+  return db.select().from(comissoesPagas).where(conditions.length ? and(...conditions) : undefined).orderBy(desc(comissoesPagas.ano), desc(comissoesPagas.mes));
+}
+
+export async function upsertComissaoPaga(data: InsertComissaoPaga) {
+  const db = await getDb();
+  if (!db) return;
+  const existing = await db.execute(
+    sql`SELECT id FROM comissoes_pagas WHERE vendedorId = ${data.vendedorId} AND ano = ${data.ano} AND mes = ${data.mes} LIMIT 1`
+  );
+  const rows = (existing[0] as unknown as Array<{ id: number }>);
+  if (rows.length > 0) {
+    await db.update(comissoesPagas).set({ ...data, updatedAt: new Date() }).where(eq(comissoesPagas.id, rows[0].id));
+  } else {
+    await db.insert(comissoesPagas).values(data);
+  }
+}
+
+export async function marcarComissaoPaga(id: number) {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(comissoesPagas).set({ pago: "S", dataPagamento: new Date(), updatedAt: new Date() }).where(eq(comissoesPagas.id, id));
+}
+
+// ─── Analytics: Vendas por Vendedor ──────────────────────────────────────────
+export async function getVendasPorVendedor(dataInicio: Date, dataFim: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  // Extract vendedor info from canal field: "vendedor:{id}:{nome}"
+  const result = await db.execute(
+    sql`SELECT 
+      SUBSTRING_INDEX(SUBSTRING_INDEX(canal, ':', 2), ':', -1) as vendedor_id,
+      SUBSTRING_INDEX(canal, ':', -1) as vendedor_nome,
+      COALESCE(SUM(totalPedido), 0) as total_vendas,
+      COUNT(*) as quantidade_pedidos
+    FROM pedidos
+    WHERE dataPedido >= ${dataInicio} 
+      AND dataPedido <= ${dataFim}
+      AND status NOT IN ('cancelado', 'recusado')
+      AND canal LIKE 'vendedor:%'
+    GROUP BY vendedor_id, vendedor_nome
+    ORDER BY total_vendas DESC`
+  );
+  return (result[0] as unknown as Array<{
+    vendedor_id: string;
+    vendedor_nome: string;
+    total_vendas: number;
+    quantidade_pedidos: number;
+  }>);
+}
+
+// ─── Analytics: Inadimplência ─────────────────────────────────────────────────
+export async function getInadimplencia(dataInicio?: Date, dataFim?: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  // Inadimplente: situacao = "Entregue" e pagamento não confirmado (rawData._pagamento_confirmado = false)
+  const dateFilter = dataInicio && dataFim
+    ? sql`AND dataPedido >= ${dataInicio} AND dataPedido <= ${dataFim}`
+    : sql``;
+  const result = await db.execute(
+    sql`SELECT 
+      id, olistId, numero, clienteNome, clienteCpfCnpj,
+      totalPedido, dataPedido, dataPrevEntrega,
+      canal,
+      SUBSTRING_INDEX(SUBSTRING_INDEX(canal, ':', 2), ':', -1) as vendedor_id,
+      SUBSTRING_INDEX(canal, ':', -1) as vendedor_nome,
+      DATEDIFF(NOW(), dataPrevEntrega) as dias_atraso,
+      rawData
+    FROM pedidos
+    WHERE situacao = 'Entregue'
+      AND (JSON_EXTRACT(rawData, '$._pagamento_confirmado') = false OR JSON_EXTRACT(rawData, '$._pagamento_confirmado') IS NULL)
+      ${dateFilter}
+    ORDER BY dias_atraso DESC`
+  );
+  return (result[0] as unknown as Array<{
+    id: number;
+    olistId: string;
+    numero: string;
+    clienteNome: string;
+    clienteCpfCnpj: string;
+    totalPedido: number;
+    dataPedido: Date;
+    dataPrevEntrega: Date;
+    canal: string;
+    vendedor_id: string;
+    vendedor_nome: string;
+    dias_atraso: number;
+    rawData: string;
+  }>);
+}
+
+// ─── Analytics: Top Clientes ──────────────────────────────────────────────────
+export async function getTopClientes(dataInicio: Date, dataFim: Date, limit = 10) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.execute(
+    sql`SELECT 
+      clienteNome,
+      clienteCpfCnpj,
+      COUNT(*) as total_pedidos,
+      COALESCE(SUM(totalPedido), 0) as total_compras,
+      MAX(dataPedido) as ultimo_pedido
+    FROM pedidos
+    WHERE dataPedido >= ${dataInicio}
+      AND dataPedido <= ${dataFim}
+      AND status NOT IN ('cancelado', 'recusado')
+      AND clienteNome IS NOT NULL
+    GROUP BY clienteNome, clienteCpfCnpj
+    ORDER BY total_compras DESC
+    LIMIT ${limit}`
+  );
+  return (result[0] as unknown as Array<{
+    clienteNome: string;
+    clienteCpfCnpj: string;
+    total_pedidos: number;
+    total_compras: number;
+    ultimo_pedido: Date;
+  }>);
+}
+
+// ─// ─── Analytics: Conciliação ───────────────────────────────────────────────
+export async function getConciliacao(dataInicio: Date, dataFim: Date) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.execute(
+    sql`SELECT 
+      id, olistId, numero, clienteNome, clienteCpfCnpj,
+      totalPedido, dataPedido, situacao,
+      CASE 
+        WHEN situacao IN ('Faturado', 'Entregue e Pago', 'Pago') THEN 'pago'
+        WHEN situacao = 'Entregue' THEN 'entregue'
+        ELSE LOWER(situacao)
+      END as status
+    FROM pedidos
+    WHERE dataPedido >= ${dataInicio}
+      AND dataPedido <= ${dataFim}
+      AND situacao NOT IN ('Cancelado', 'Recusado')
+    ORDER BY dataPedido DESC
+    LIMIT 200`
+  );
+  return (result[0] as unknown as Array<{
+    id: number;
+    olistId: string;
+    numero: string;
+    clienteNome: string;
+    clienteCpfCnpj: string;
+    totalPedido: number;
+    dataPedido: Date;
+    situacao: string;
+    status: string;
+  }>);
 }

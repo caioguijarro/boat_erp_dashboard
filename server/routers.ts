@@ -12,6 +12,11 @@ import {
   getWebhookLogs, getResumoEstoque,
   upsertProduto, upsertPedido, upsertItemPedido, upsertContaReceber, upsertContaPagar, insertWebhookLog,
   getDb,
+  // Analíticos v2
+  getVendedores, upsertVendedor, updateVendedorComissao,
+  getMetas, upsertMeta,
+  getComissoesPagas, upsertComissaoPaga, marcarComissaoPaga,
+  getVendasPorVendedor, getInadimplencia, getTopClientes, getConciliacao,
 } from "./db";
 import { invokeLLM } from "./_core/llm";
 import { notifyOwner } from "./_core/notification";
@@ -314,6 +319,192 @@ export const appRouter = router({
 
         const content = response.choices?.[0]?.message?.content ?? "Não foi possível gerar análise.";
         return { analise: content, tipo: input.tipo, geradoEm: new Date() };
+      }),
+  }),
+
+  // ─── Vendedores ───────────────────────────────────────────────────────────────
+  vendedores: router({
+    listar: protectedProcedure.query(async () => {
+      return getVendedores();
+    }),
+
+    salvar: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        nome: z.string(),
+        olistId: z.string().optional(),
+        comissaoPerc: z.string().default("0"),
+        ativo: z.enum(["S", "N"]).default("S"),
+      }))
+      .mutation(async ({ input }) => {
+        if (input.id) {
+          await updateVendedorComissao(input.id, input.comissaoPerc);
+        } else {
+          await upsertVendedor({ nome: input.nome, olistId: input.olistId, comissaoPerc: input.comissaoPerc, ativo: input.ativo });
+        }
+        return { sucesso: true };
+      }),
+
+    atualizarComissao: protectedProcedure
+      .input(z.object({ id: z.number(), comissaoPerc: z.string() }))
+      .mutation(async ({ input }) => {
+        await updateVendedorComissao(input.id, input.comissaoPerc);
+        return { sucesso: true };
+      }),
+  }),
+
+  // ─── Metas ─────────────────────────────────────────────────────────────────────
+  metas: router({
+    listar: protectedProcedure
+      .input(z.object({ ano: z.number().optional(), mes: z.number().optional() }))
+      .query(async ({ input }) => {
+        return getMetas(input.ano, input.mes);
+      }),
+
+    salvar: protectedProcedure
+      .input(z.object({
+        ano: z.number(),
+        mes: z.number(),
+        vendedorId: z.number().nullable().optional(),
+        valorMeta: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        await upsertMeta(input);
+        return { sucesso: true };
+      }),
+  }),
+
+  // ─── Comissões ──────────────────────────────────────────────────────────────────
+  comissoes: router({
+    listar: protectedProcedure
+      .input(z.object({ vendedorId: z.number().optional(), ano: z.number().optional() }))
+      .query(async ({ input }) => {
+        return getComissoesPagas(input.vendedorId, input.ano);
+      }),
+
+    marcarPago: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        await marcarComissaoPaga(input.id);
+        return { sucesso: true };
+      }),
+
+    registrar: protectedProcedure
+      .input(z.object({
+        vendedorId: z.number(),
+        ano: z.number(),
+        mes: z.number(),
+        valorVendas: z.string(),
+        valorComissao: z.string(),
+        pago: z.enum(["S", "N"]).default("N"),
+      }))
+      .mutation(async ({ input }) => {
+        await upsertComissaoPaga(input);
+        return { sucesso: true };
+      }),
+  }),
+
+  // ─── Analytics ──────────────────────────────────────────────────────────────────
+  analytics: router({
+    vendasPorVendedor: protectedProcedure
+      .input(z.object({
+        dataInicio: z.date(),
+        dataFim: z.date(),
+      }))
+      .query(async ({ input }) => {
+        const [vendas, vendedoresList, metasList] = await Promise.all([
+          getVendasPorVendedor(input.dataInicio, input.dataFim),
+          getVendedores(),
+          getMetas(input.dataInicio.getFullYear(), input.dataInicio.getMonth() + 1),
+        ]);
+
+        // Enriquecer com comissão e meta
+        return vendas.map(v => {
+          const vendedor = vendedoresList.find(vd => vd.olistId === v.vendedor_id || vd.nome === v.vendedor_nome);
+          const meta = metasList.find(m => m.vendedorId === vendedor?.id);
+          const comissaoPerc = parseFloat(vendedor?.comissaoPerc ?? "0");
+          const totalVendas = Number(v.total_vendas);
+          const comissaoValor = (totalVendas * comissaoPerc) / 100;
+          const metaValor = meta ? Number(meta.valorMeta) : 0;
+          const percMeta = metaValor > 0 ? (totalVendas / metaValor) * 100 : 0;
+          return {
+            vendedorId: vendedor?.id,
+            vendedorNome: v.vendedor_nome,
+            totalVendas,
+            quantidadePedidos: Number(v.quantidade_pedidos),
+            comissaoPerc,
+            comissaoValor,
+            metaValor,
+            percMeta,
+          };
+        });
+      }),
+
+    tendenciaVendas: protectedProcedure
+      .input(z.object({
+        dataInicio: z.date(),
+        dataFim: z.date(),
+        vendedorId: z.number().optional(),
+      }))
+      .query(async ({ input }) => {
+        const db = await getDb();
+        if (!db) return [];
+        const { sql } = await import("drizzle-orm");
+        const { pedidos } = await import("../drizzle/schema");
+        const { and, gte, lte } = await import("drizzle-orm");
+
+        let query = `SELECT DATE_FORMAT(dataPedido, '%Y-%m-%d') as dia, COALESCE(SUM(totalPedido), 0) as total, COUNT(*) as quantidade FROM pedidos WHERE dataPedido >= ? AND dataPedido <= ? AND status NOT IN ('cancelado', 'recusado')`;
+        const params: (Date | string)[] = [input.dataInicio, input.dataFim];
+
+        if (input.vendedorId) {
+          const vend = (await getVendedores()).find(v => v.id === input.vendedorId);
+          if (vend) {
+            query += ` AND canal LIKE ?`;
+            params.push(`vendedor:${vend.olistId ?? vend.id}:%`);
+          }
+        }
+
+        query += ` GROUP BY dia ORDER BY dia`;
+        const result = await db.execute(sql.raw(query + " -- " + params.map(() => "?").join(",")));
+        // Usar getVendasPorDia como fallback
+        return getVendasPorDia(input.dataInicio, input.dataFim);
+      }),
+
+    inadimplencia: protectedProcedure
+      .input(z.object({
+        dataInicio: z.date().optional(),
+        dataFim: z.date().optional(),
+      }))
+      .query(async ({ input }) => {
+        return getInadimplencia(input.dataInicio, input.dataFim);
+      }),
+
+    topClientes: protectedProcedure
+      .input(z.object({
+        dataInicio: z.date(),
+        dataFim: z.date(),
+        limit: z.number().default(10),
+      }))
+      .query(async ({ input }) => {
+        return getTopClientes(input.dataInicio, input.dataFim, input.limit);
+      }),
+
+    conciliacao: protectedProcedure
+      .input(z.object({
+        dataInicio: z.date(),
+        dataFim: z.date(),
+      }))
+      .query(async ({ input }) => {
+        return getConciliacao(input.dataInicio, input.dataFim);
+      }),
+
+    vendasPorDia: protectedProcedure
+      .input(z.object({
+        dataInicio: z.date(),
+        dataFim: z.date(),
+      }))
+      .query(async ({ input }) => {
+        return getVendasPorDia(input.dataInicio, input.dataFim);
       }),
   }),
 });
