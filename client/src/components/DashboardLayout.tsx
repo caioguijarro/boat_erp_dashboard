@@ -21,15 +21,19 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, Users } from "lucide-react";
+import { BarChart3, Beer, DollarSign, LayoutDashboard, LogOut, Package, PanelLeft, ShoppingCart, Webhook, Zap } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: LayoutDashboard, label: "Dashboard", path: "/dashboard" },
+  { icon: ShoppingCart, label: "Pedidos", path: "/pedidos" },
+  { icon: Package, label: "Estoque", path: "/estoque" },
+  { icon: DollarSign, label: "Financeiro", path: "/financeiro" },
+  { icon: Zap, label: "Insights IA", path: "/insights" },
+  { icon: Webhook, label: "Webhooks", path: "/webhooks" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -170,9 +174,11 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed ? (
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
-                  </span>
+                  <Beer className="h-5 w-5 text-primary shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold tracking-tight truncate text-sm text-primary">BOAT BEER</span>
+                    <span className="text-xs text-muted-foreground truncate">ERP Dashboard</span>
+                  </div>
                 </div>
               ) : null}
             </div>
