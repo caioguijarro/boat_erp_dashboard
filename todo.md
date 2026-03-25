@@ -42,3 +42,4 @@
 - [x] Implementar dados de demonstração para validar o sistema
 - [x] Adicionar endpoint de teste de webhook
 - [x] Corrigir URLs de webhook na página Webhooks para usar domínio de produção
+- [x] Diagnosticar e corrigir botão de dados demo que não está populando o banco

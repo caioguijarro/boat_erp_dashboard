@@ -171,14 +171,14 @@ export const appRouter = router({
 
       // Produtos Boat Beer
       const produtosList = [
-        { olistId: "P001", nome: "Boat Beer Lager 350ml", sku: "BOAT-LAGER-350", categoria: "Cerveja", preco: "12.90", estoqueAtual: "480", estoqueMinimo: "100", ativo: "S" as const },
-        { olistId: "P002", nome: "Boat Beer IPA 473ml", sku: "BOAT-IPA-473", categoria: "Cerveja", preco: "18.90", estoqueAtual: "35", estoqueMinimo: "80", ativo: "S" as const },
-        { olistId: "P003", nome: "Boat Beer Weiss 500ml", sku: "BOAT-WEISS-500", categoria: "Cerveja", preco: "16.90", estoqueAtual: "0", estoqueMinimo: "60", ativo: "S" as const },
-        { olistId: "P004", nome: "Boat Beer Pack 6un Lager", sku: "BOAT-PACK6-LAGER", categoria: "Pack", preco: "69.90", estoqueAtual: "120", estoqueMinimo: "30", ativo: "S" as const },
-        { olistId: "P005", nome: "Boat Beer Pack 12un Lager", sku: "BOAT-PACK12-LAGER", categoria: "Pack", preco: "129.90", estoqueAtual: "55", estoqueMinimo: "20", ativo: "S" as const },
-        { olistId: "P006", nome: "Copo Boat Beer 500ml", sku: "BOAT-COPO-500", categoria: "Acessórios", preco: "29.90", estoqueAtual: "200", estoqueMinimo: "50", ativo: "S" as const },
-        { olistId: "P007", nome: "Camiseta Boat Beer P", sku: "BOAT-CAMISA-P", categoria: "Vestuário", preco: "89.90", estoqueAtual: "15", estoqueMinimo: "20", ativo: "S" as const },
-        { olistId: "P008", nome: "Boat Beer Sem Álcool 350ml", sku: "BOAT-SA-350", categoria: "Cerveja", preco: "10.90", estoqueAtual: "320", estoqueMinimo: "80", ativo: "S" as const },
+        { olistId: "P001", nome: "Boat Beer Lager 350ml", codigo: "BOAT-LAGER-350", categoria: "Cerveja", preco: "12.90", estoqueAtual: "480", estoqueMinimo: "100", ativo: "S" as const },
+        { olistId: "P002", nome: "Boat Beer IPA 473ml", codigo: "BOAT-IPA-473", categoria: "Cerveja", preco: "18.90", estoqueAtual: "35", estoqueMinimo: "80", ativo: "S" as const },
+        { olistId: "P003", nome: "Boat Beer Weiss 500ml", codigo: "BOAT-WEISS-500", categoria: "Cerveja", preco: "16.90", estoqueAtual: "0", estoqueMinimo: "60", ativo: "S" as const },
+        { olistId: "P004", nome: "Boat Beer Pack 6un Lager", codigo: "BOAT-PACK6-LAGER", categoria: "Pack", preco: "69.90", estoqueAtual: "120", estoqueMinimo: "30", ativo: "S" as const },
+        { olistId: "P005", nome: "Boat Beer Pack 12un Lager", codigo: "BOAT-PACK12-LAGER", categoria: "Pack", preco: "129.90", estoqueAtual: "55", estoqueMinimo: "20", ativo: "S" as const },
+        { olistId: "P006", nome: "Copo Boat Beer 500ml", codigo: "BOAT-COPO-500", categoria: "Acessórios", preco: "29.90", estoqueAtual: "200", estoqueMinimo: "50", ativo: "S" as const },
+        { olistId: "P007", nome: "Camiseta Boat Beer P", codigo: "BOAT-CAMISA-P", categoria: "Vestuário", preco: "89.90", estoqueAtual: "15", estoqueMinimo: "20", ativo: "S" as const },
+        { olistId: "P008", nome: "Boat Beer Sem Álcool 350ml", codigo: "BOAT-SA-350", categoria: "Cerveja", preco: "10.90", estoqueAtual: "320", estoqueMinimo: "80", ativo: "S" as const },
       ];
       for (const p of produtosList) await upsertProduto(p);
 
