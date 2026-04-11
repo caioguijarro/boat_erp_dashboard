@@ -1,7 +1,10 @@
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
+import { ENV } from "./_core/env";
+import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   getProdutos, getProdutosBaixoEstoque, getProdutoCategorias,
@@ -10,6 +13,7 @@ import {
   getContasReceber, getTotalContasReceber,
   getContasPagar, getTotalContasPagar,
   getWebhookLogs, getResumoEstoque,
+  upsertUser,
   upsertProduto, upsertPedido, upsertItemPedido, upsertContaReceber, upsertContaPagar, insertWebhookLog,
   getDb,
   // Analíticos v2
@@ -30,6 +34,28 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    loginWithPassword: publicProcedure
+      .input(z.object({ password: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        if (!ENV.adminPassword || input.password !== ENV.adminPassword) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Senha incorreta" });
+        }
+        const openId = "password-admin";
+        await upsertUser({
+          openId,
+          name: ENV.localAuthName,
+          email: ENV.localAuthEmail,
+          loginMethod: "password",
+          lastSignedIn: new Date(),
+        });
+        const sessionToken = await sdk.createSessionToken(openId, {
+          name: ENV.localAuthName,
+          expiresInMs: ONE_YEAR_MS,
+        });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+        return { success: true } as const;
+      }),
   }),
 
   // ─── Dashboard / Métricas ─────────────────────────────────────────────────

@@ -1,13 +1,24 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
-import { getLoginUrl } from "@/const";
-import { Beer, BarChart3, Package, DollarSign, Zap } from "lucide-react";
-import { useEffect } from "react";
+import { Beer } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 
 export default function Home() {
   const { user, loading } = useAuth();
   const [, setLocation] = useLocation();
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const loginMutation = trpc.auth.loginWithPassword.useMutation({
+    onSuccess: () => {
+      setLocation("/dashboard");
+    },
+    onError: () => {
+      setError("Senha incorreta. Tente novamente.");
+    },
+  });
 
   useEffect(() => {
     if (!loading && user) {
@@ -26,61 +37,56 @@ export default function Home() {
     );
   }
 
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    loginMutation.mutate({ password });
+  };
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="border-b border-border/50 px-6 py-4">
-        <div className="flex items-center gap-2">
-          <Beer className="h-6 w-6 text-primary" />
-          <span className="font-bold text-primary text-lg">BOAT BEER</span>
-          <span className="text-muted-foreground text-sm ml-1">ERP Dashboard</span>
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6">
+      <div className="w-full max-w-sm space-y-8">
+        <div className="flex flex-col items-center gap-3">
+          <Beer className="h-10 w-10 text-primary" />
+          <h1 className="text-2xl font-bold text-foreground">BOAT BEER ERP</h1>
+          <p className="text-muted-foreground text-sm text-center">
+            Central de Operações · Santos, SP
+          </p>
         </div>
-      </header>
 
-      {/* Hero */}
-      <main className="flex-1 flex items-center justify-center px-6">
-        <div className="max-w-2xl w-full text-center space-y-8">
-          <div className="space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium">
-              <Zap className="h-3.5 w-3.5" />
-              Performance Beer · Santos, SP
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">
-              Central de Operações<br />
-              <span className="text-primary">Boat Beer Company</span>
-            </h1>
-            <p className="text-muted-foreground text-lg max-w-md mx-auto">
-              Dashboard integrado ao Olist ERP para gestão de pedidos, estoque, financeiro e insights em tempo real.
-            </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-foreground" htmlFor="password">
+              Senha de acesso
+            </label>
+            <input
+              id="password"
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Digite a senha"
+              required
+              autoFocus
+              className="w-full px-3 py-2 rounded-md border border-border bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
 
-          {/* Feature cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-left">
-            {[
-              { icon: BarChart3, label: "Vendas", desc: "Métricas em tempo real" },
-              { icon: Package, label: "Estoque", desc: "Alertas automáticos" },
-              { icon: DollarSign, label: "Financeiro", desc: "Fluxo de caixa" },
-              { icon: Zap, label: "Insights IA", desc: "Análises automáticas" },
-            ].map(({ icon: Icon, label, desc }) => (
-              <div key={label} className="bg-card border border-border rounded-lg p-3 space-y-1">
-                <Icon className="h-4 w-4 text-primary" />
-                <p className="text-sm font-medium text-foreground">{label}</p>
-                <p className="text-xs text-muted-foreground">{desc}</p>
-              </div>
-            ))}
-          </div>
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
 
           <Button
+            type="submit"
             size="lg"
-            className="px-8 shadow-lg shadow-primary/20"
-            onClick={() => { window.location.href = getLoginUrl(); }}
+            className="w-full"
+            disabled={loginMutation.isPending}
           >
-            Acessar Dashboard
+            {loginMutation.isPending ? "Entrando..." : "Acessar Dashboard"}
           </Button>
-        </div>
-      </main>
+        </form>
+      </div>
 
-      <footer className="border-t border-border/50 px-6 py-4 text-center text-xs text-muted-foreground">
+      <footer className="absolute bottom-4 text-xs text-muted-foreground">
         Boat Beer Company · A Primeira Performance Beer do Brasil
       </footer>
     </div>
