@@ -305,6 +305,11 @@ let pedidosTimer: ReturnType<typeof setInterval> | null = null;
 let produtosTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startOlistPolling() {
+  if (process.env.VERCEL === "1") {
+    console.log("[OlistSync] Vercel detectado: Polling contínuo desativado localmente a favor do Cron nativo");
+    return;
+  }
+  
   if (!TOKEN) {
     console.warn("[OlistSync] OLIST_API_TOKEN not configured — polling disabled");
     return;
