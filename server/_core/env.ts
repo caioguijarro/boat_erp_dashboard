@@ -1,11 +1,14 @@
 import { z } from "zod";
 
 const envSchema = z.object({
+  VITE_AUTH_MODE: z.string().optional().default("oauth"),
   VITE_APP_ID: z.string().optional().default(""),
   JWT_SECRET: z.string().optional().default(""),
   DATABASE_URL: z.string().optional().default(""),
   OAUTH_SERVER_URL: z.string().optional().default(""),
   OWNER_OPEN_ID: z.string().optional().default(""),
+  LOCAL_AUTH_NAME: z.string().optional().default("Administrador"),
+  LOCAL_AUTH_EMAIL: z.string().optional().default("admin@boat.local"),
   NODE_ENV: z.string().optional().default("development"),
   BUILT_IN_FORGE_API_URL: z.string().optional().default(""),
   BUILT_IN_FORGE_API_KEY: z.string().optional().default(""),
@@ -20,11 +23,14 @@ if (!_env.success) {
 }
 
 export const ENV = {
+  authMode: _env.data.VITE_AUTH_MODE,
   appId: _env.data.VITE_APP_ID,
   cookieSecret: _env.data.JWT_SECRET,
   databaseUrl: _env.data.DATABASE_URL,
   oAuthServerUrl: _env.data.OAUTH_SERVER_URL,
   ownerOpenId: _env.data.OWNER_OPEN_ID,
+  localAuthName: _env.data.LOCAL_AUTH_NAME,
+  localAuthEmail: _env.data.LOCAL_AUTH_EMAIL,
   isProduction: _env.data.NODE_ENV === "production",
   forgeApiUrl: _env.data.BUILT_IN_FORGE_API_URL,
   forgeApiKey: _env.data.BUILT_IN_FORGE_API_KEY,
