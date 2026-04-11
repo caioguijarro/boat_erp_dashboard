@@ -447,27 +447,42 @@ export const appRouter = router({
         vendedorId: z.number().optional(),
       }))
       .query(async ({ input }) => {
-        const db = await getDb();
-        if (!db) return [];
-        const { sql } = await import("drizzle-orm");
-        const { pedidos } = await import("../drizzle/schema");
-        const { and, gte, lte } = await import("drizzle-orm");
-
-        let query = `SELECT DATE_FORMAT(dataPedido, '%Y-%m-%d') as dia, COALESCE(SUM(totalPedido), 0) as total, COUNT(*) as quantidade FROM pedidos WHERE dataPedido >= ? AND dataPedido <= ? AND status NOT IN ('cancelado', 'recusado')`;
-        const params: (Date | string)[] = [input.dataInicio, input.dataFim];
-
-        if (input.vendedorId) {
-          const vend = (await getVendedores()).find(v => v.id === input.vendedorId);
-          if (vend) {
-            query += ` AND canal LIKE ?`;
-            params.push(`vendedor:${vend.olistId ?? vend.id}:%`);
-          }
+        if (!input.vendedorId) {
+          return getVendasPorDia(input.dataInicio, input.dataFim);
         }
 
-        query += ` GROUP BY dia ORDER BY dia`;
-        const result = await db.execute(sql.raw(query + " -- " + params.map(() => "?").join(",")));
-        // Usar getVendasPorDia como fallback
-        return getVendasPorDia(input.dataInicio, input.dataFim);
+        const vendedor = (await getVendedores()).find(v => v.id === input.vendedorId);
+        if (!vendedor) return [];
+
+        const db = await getDb();
+        if (!db) return [];
+
+        const { sql } = await import("drizzle-orm");
+        const result = await db.execute(
+          sql`SELECT
+                DATE_FORMAT(dataPedido, '%Y-%m-%d') as dia,
+                COALESCE(SUM(totalPedido), 0) as total,
+                COUNT(*) as quantidade
+              FROM pedidos
+              WHERE dataPedido >= ${input.dataInicio}
+                AND dataPedido <= ${input.dataFim}
+                AND status NOT IN ('cancelado', 'recusado')
+                AND canal LIKE ${`vendedor:${vendedor.olistId ?? vendedor.id}:%`}
+              GROUP BY dia
+              ORDER BY dia`
+        );
+
+        const rows = result[0] as unknown as Array<{
+          dia: string;
+          total: number;
+          quantidade: number;
+        }>;
+
+        return rows.map(row => ({
+          data: row.dia,
+          total: Number(row.total),
+          quantidade: Number(row.quantidade),
+        }));
       }),
 
     inadimplencia: protectedProcedure

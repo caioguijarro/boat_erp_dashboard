@@ -1,4 +1,3 @@
-import DashboardLayout from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import {
@@ -107,8 +106,7 @@ export default function Dashboard() {
   })) ?? [];
 
   return (
-    <DashboardLayout>
-      <div className="space-y-6 max-w-7xl mx-auto">
+    <div className="space-y-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -338,7 +336,6 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </DashboardLayout>
+    </div>
   );
 }

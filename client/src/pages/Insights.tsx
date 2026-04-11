@@ -1,4 +1,3 @@
-import DashboardLayout from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
@@ -37,8 +36,7 @@ export default function Insights() {
   const insightAtual = INSIGHTS.find(i => i.tipo === tipoAtivo);
 
   return (
-    <DashboardLayout>
-      <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Insights com IA</h1>
@@ -120,7 +118,6 @@ export default function Insights() {
             )}
           </CardContent>
         </Card>
-      </div>
-    </DashboardLayout>
+    </div>
   );
 }

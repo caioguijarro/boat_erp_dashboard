@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { BarChart3, Beer, DollarSign, LayoutDashboard, LogOut, Package, PanelLeft, ShoppingCart, Webhook, Zap, TrendingUp, Users, AlertTriangle, UserCheck } from "lucide-react";
+import { Beer, DollarSign, LayoutDashboard, LogOut, Package, PanelLeft, ShoppingCart, Webhook, Zap, TrendingUp, Users, AlertTriangle, UserCheck } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -51,13 +51,15 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
-    const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
+    if (typeof window === "undefined") return DEFAULT_WIDTH;
+    const saved = window.localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { loading, user } = useAuth();
+  const { loading, user, logout } = useAuth();
 
   useEffect(() => {
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
   }, [sidebarWidth]);
 
   if (loading) {
@@ -98,7 +100,11 @@ export default function DashboardLayout({
         } as CSSProperties
       }
     >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+      <DashboardLayoutContent
+        setSidebarWidth={setSidebarWidth}
+        user={user}
+        logout={logout}
+      >
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
@@ -108,13 +114,16 @@ export default function DashboardLayout({
 type DashboardLayoutContentProps = {
   children: React.ReactNode;
   setSidebarWidth: (width: number) => void;
+  user: ReturnType<typeof useAuth>["user"];
+  logout: ReturnType<typeof useAuth>["logout"];
 };
 
 function DashboardLayoutContent({
   children,
   setSidebarWidth,
+  user,
+  logout,
 }: DashboardLayoutContentProps) {
-  const { user, logout } = useAuth();
   const [location, setLocation] = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";

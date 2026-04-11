@@ -1,4 +1,3 @@
-import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -63,8 +62,7 @@ export default function Financeiro() {
   ];
 
   return (
-    <DashboardLayout>
-      <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Financeiro</h1>
@@ -319,7 +317,6 @@ export default function Financeiro() {
             </CardContent>
           </Card>
         )}
-      </div>
-    </DashboardLayout>
+    </div>
   );
 }

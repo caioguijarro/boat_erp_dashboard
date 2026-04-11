@@ -1,4 +1,3 @@
-import DashboardLayout from "@/components/DashboardLayout";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,8 +62,7 @@ export default function Pedidos() {
   ) ?? [];
 
   return (
-    <DashboardLayout>
-      <div className="space-y-5 max-w-7xl mx-auto">
+    <div className="space-y-5 max-w-7xl mx-auto">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold text-foreground">Pedidos</h1>
@@ -276,6 +274,6 @@ export default function Pedidos() {
           ) : null}
         </DialogContent>
       </Dialog>
-    </DashboardLayout>
+    </div>
   );
 }
