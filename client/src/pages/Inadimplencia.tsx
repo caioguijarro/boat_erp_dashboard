@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { AlertTriangle, DollarSign, Clock, Users, ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { AlertTriangle, DollarSign, Clock, Users, ChevronLeft, ChevronRight, Search, ArrowLeft } from "lucide-react";
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 }).format(value);
@@ -25,6 +26,7 @@ function getBadgeAtraso(dias: number) {
 }
 
 export default function Inadimplencia() {
+  const [, setLocation] = useLocation();
   const [busca, setBusca] = useState("");
   const [filtroVendedor, setFiltroVendedor] = useState<string>("todos");
 
@@ -70,6 +72,15 @@ export default function Inadimplencia() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          onClick={() => setLocation("/")} 
+          className="mb-2 -ml-2 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Voltar
+        </Button>
         <h1 className="text-2xl font-bold text-foreground">Inadimplência</h1>
         <p className="text-muted-foreground text-sm">Pedidos entregues e não pagos</p>
       </div>

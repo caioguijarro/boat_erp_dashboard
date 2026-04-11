@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ReferenceLine, Legend, BarChart, Bar,
 } from "recharts";
-import { TrendingUp, Target, DollarSign, ShoppingCart, ChevronLeft, ChevronRight, Settings } from "lucide-react";
+import { TrendingUp, Target, DollarSign, ShoppingCart, ChevronLeft, ChevronRight, Settings, ArrowLeft } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
@@ -38,6 +39,7 @@ function getDiaAtual(ano: number, mes: number): number {
 }
 
 export default function Vendas() {
+  const [, setLocation] = useLocation();
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
   const [mes, setMes] = useState(hoje.getMonth() + 1);
@@ -135,8 +137,17 @@ export default function Vendas() {
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => setLocation("/")} 
+            className="mb-2 -ml-2 text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar
+          </Button>
           <h1 className="text-2xl font-bold text-foreground">Vendas</h1>
           <p className="text-muted-foreground text-sm">Tendência e acompanhamento de metas</p>
         </div>

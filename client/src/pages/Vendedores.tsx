@@ -217,89 +217,32 @@ export default function Vendedores() {
                       </div>
                       <div className="flex items-center gap-2">
                         {/* Editar comissão */}
-                        <Dialog open={editVendedor?.id === v.vendedorId} onOpenChange={open => !open && setEditVendedor(null)}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 gap-1 text-xs"
-                              onClick={() => {
-                                if (v.vendedorId) setEditVendedor({ id: v.vendedorId, nome: v.vendedorNome, comissaoPerc: String(v.comissaoPerc) });
-                                setNovaComissao(String(v.comissaoPerc));
-                              }}
-                            >
-                              <Edit2 className="h-3 w-3" />
-                              {v.comissaoPerc}% comissão
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Comissão — {editVendedor?.nome}</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4 pt-2">
-                              <div>
-                                <label className="text-sm font-medium">% de Comissão</label>
-                                <Input
-                                  type="number"
-                                  step="0.1"
-                                  placeholder="Ex: 3.5"
-                                  value={novaComissao}
-                                  onChange={e => setNovaComissao(e.target.value)}
-                                  className="mt-1"
-                                />
-                              </div>
-                              <Button
-                                className="w-full"
-                                onClick={() => editVendedor && atualizarComissao.mutate({ id: editVendedor.id, comissaoPerc: novaComissao })}
-                                disabled={atualizarComissao.isPending}
-                              >
-                                Salvar
-                              </Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => {
+                            if (v.vendedorId) setEditVendedor({ id: v.vendedorId, nome: v.vendedorNome, comissaoPerc: String(v.comissaoPerc) });
+                            setNovaComissao(String(v.comissaoPerc));
+                          }}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                          {v.comissaoPerc}% comissão
+                        </Button>
 
                         {/* Editar meta */}
-                        <Dialog open={editMetaVendedor?.id === v.vendedorId} onOpenChange={open => !open && setEditMetaVendedor(null)}>
-                          <DialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 gap-1 text-xs"
-                              onClick={() => {
-                                if (v.vendedorId) setEditMetaVendedor({ id: v.vendedorId, nome: v.vendedorNome });
-                                setNovaMeta(String(v.metaValor || ""));
-                              }}
-                            >
-                              <Target className="h-3 w-3" />
-                              {v.metaValor > 0 ? `Meta: ${formatCurrency(v.metaValor)}` : "Definir Meta"}
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent>
-                            <DialogHeader>
-                              <DialogTitle>Meta — {editMetaVendedor?.nome} — {MESES[mes - 1]} {ano}</DialogTitle>
-                            </DialogHeader>
-                            <div className="space-y-4 pt-2">
-                              <div>
-                                <label className="text-sm font-medium">Valor da Meta (R$)</label>
-                                <Input
-                                  type="number"
-                                  placeholder="Ex: 20000"
-                                  value={novaMeta}
-                                  onChange={e => setNovaMeta(e.target.value)}
-                                  className="mt-1"
-                                />
-                              </div>
-                              <Button
-                                className="w-full"
-                                onClick={() => editMetaVendedor && salvarMeta.mutate({ ano, mes, vendedorId: editMetaVendedor.id, valorMeta: novaMeta })}
-                                disabled={salvarMeta.isPending}
-                              >
-                                Salvar Meta
-                              </Button>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() => {
+                            if (v.vendedorId) setEditMetaVendedor({ id: v.vendedorId, nome: v.vendedorNome });
+                            setNovaMeta(String(v.metaValor || ""));
+                          }}
+                        >
+                          <Target className="h-3 w-3" />
+                          {v.metaValor > 0 ? `Meta: ${formatCurrency(v.metaValor)}` : "Definir Meta"}
+                        </Button>
                       </div>
                     </div>
 
@@ -406,6 +349,62 @@ export default function Vendedores() {
           </CardContent>
         </Card>
       )}
+
+      {/* Global Dialogs */}
+      <Dialog open={!!editVendedor} onOpenChange={open => !open && setEditVendedor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Comissão — {editVendedor?.nome}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium">% de Comissão</label>
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="Ex: 3.5"
+                value={novaComissao}
+                onChange={e => setNovaComissao(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => editVendedor && atualizarComissao.mutate({ id: editVendedor.id, comissaoPerc: novaComissao })}
+              disabled={atualizarComissao.isPending}
+            >
+              {atualizarComissao.isPending ? "Salvando..." : "Salvar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editMetaVendedor} onOpenChange={open => !open && setEditMetaVendedor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Meta — {editMetaVendedor?.nome} — {MESES[mes - 1]} {ano}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-sm font-medium">Valor da Meta (R$)</label>
+              <Input
+                type="number"
+                placeholder="Ex: 20000"
+                value={novaMeta}
+                onChange={e => setNovaMeta(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <Button
+              className="w-full"
+              onClick={() => editMetaVendedor && salvarMeta.mutate({ ano, mes, vendedorId: editMetaVendedor.id, valorMeta: novaMeta })}
+              disabled={salvarMeta.isPending}
+            >
+              {salvarMeta.isPending ? "Salvando..." : "Salvar Meta"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

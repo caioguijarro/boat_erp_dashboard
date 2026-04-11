@@ -1,10 +1,32 @@
+import { z } from "zod";
+
+const envSchema = z.object({
+  VITE_APP_ID: z.string().optional().default(""),
+  JWT_SECRET: z.string().optional().default(""),
+  DATABASE_URL: z.string().optional().default(""),
+  OAUTH_SERVER_URL: z.string().optional().default(""),
+  OWNER_OPEN_ID: z.string().optional().default(""),
+  NODE_ENV: z.string().optional().default("development"),
+  BUILT_IN_FORGE_API_URL: z.string().optional().default(""),
+  BUILT_IN_FORGE_API_KEY: z.string().optional().default(""),
+  OLIST_API_TOKEN: z.string().optional().default(""),
+});
+
+const _env = envSchema.safeParse(process.env);
+
+if (!_env.success) {
+  console.error("❌ Variáveis de ambiente inválidas:", _env.error.format());
+  throw new Error("Invalid environment variables");
+}
+
 export const ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  appId: _env.data.VITE_APP_ID,
+  cookieSecret: _env.data.JWT_SECRET,
+  databaseUrl: _env.data.DATABASE_URL,
+  oAuthServerUrl: _env.data.OAUTH_SERVER_URL,
+  ownerOpenId: _env.data.OWNER_OPEN_ID,
+  isProduction: _env.data.NODE_ENV === "production",
+  forgeApiUrl: _env.data.BUILT_IN_FORGE_API_URL,
+  forgeApiKey: _env.data.BUILT_IN_FORGE_API_KEY,
+  olistApiToken: _env.data.OLIST_API_TOKEN,
 };

@@ -10,9 +10,10 @@ import { upsertProduto, upsertPedido, upsertItemPedido, insertWebhookLog } from 
 import { getDb } from "./db";
 import { vendedores } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import { ENV } from "./_core/env";
 
 const OLIST_API_BASE = "https://api.tiny.com.br/api2";
-const TOKEN = process.env.OLIST_API_TOKEN;
+const TOKEN = ENV.olistApiToken;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,14 @@ async function olistPost(endpoint: string, params: Record<string, string>): Prom
     body: body.toString(),
   });
   if (!res.ok) throw new Error(`Olist API error: ${res.status} ${res.statusText}`);
-  const data = await res.json();
+  
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    throw new Error("Olist API error: Invalid JSON response");
+  }
+
   if (data?.retorno?.status === "Erro") {
     throw new Error(`Olist API error: ${JSON.stringify(data.retorno.erros)}`);
   }
