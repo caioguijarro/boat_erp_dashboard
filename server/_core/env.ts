@@ -23,7 +23,7 @@ if (!_env.success) {
 }
 
 export const ENV = {
-  authMode: _env.data.VITE_AUTH_MODE,
+  authMode: _env.data.VITE_AUTH_MODE.trim().toLowerCase(),
   appId: _env.data.VITE_APP_ID,
   cookieSecret: _env.data.JWT_SECRET,
   databaseUrl: _env.data.DATABASE_URL,
