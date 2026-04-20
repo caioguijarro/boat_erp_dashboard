@@ -1,11 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import { registerOAuthRoutes } from "../server/_core/oauth";
-import { appRouter } from "../server/routers";
-import { createContext } from "../server/_core/context";
-import { webhookRouter } from "../server/webhook";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { syncPedidos, syncProdutos } from "../server/olistSync";
 
 const app = express();
 
@@ -22,33 +17,76 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
-registerOAuthRoutes(app);
-app.use("/api/webhook", webhookRouter);
+// Lazy-load all server modules with explicit .js extensions so
+// @vercel/node can resolve them after TypeScript compilation.
+// Error is exposed as JSON so we can diagnose the exact failing module.
+let initError: any = null;
+let initDone = false;
 
-app.use(
-  "/api/trpc",
-  createExpressMiddleware({
-    router: appRouter,
-    createContext,
-  })
-);
-
-app.get('/api/cron/sync-pedidos', async (req: any, res: any) => {
+const initPromise = (async () => {
   try {
-    const result = await syncPedidos(2);
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
-  }
-});
+    const [
+      { registerOAuthRoutes },
+      { appRouter },
+      { createContext },
+      { webhookRouter },
+      { syncPedidos, syncProdutos },
+    ] = await Promise.all([
+      import("../server/_core/oauth.js"),
+      import("../server/routers.js"),
+      import("../server/_core/context.js"),
+      import("../server/webhook.js"),
+      import("../server/olistSync.js"),
+    ]);
 
-app.get('/api/cron/sync-produtos', async (req: any, res: any) => {
-  try {
-    const result = await syncProdutos();
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ error: String(err) });
+    registerOAuthRoutes(app);
+    app.use("/api/webhook", webhookRouter);
+
+    app.use(
+      "/api/trpc",
+      createExpressMiddleware({ router: appRouter, createContext })
+    );
+
+    app.get("/api/cron/sync-pedidos", async (req: any, res: any) => {
+      try {
+        const result = await syncPedidos(2);
+        res.json(result);
+      } catch (err) {
+        res.status(500).json({ error: String(err) });
+      }
+    });
+
+    app.get("/api/cron/sync-produtos", async (req: any, res: any) => {
+      try {
+        const result = await syncProdutos();
+        res.json(result);
+      } catch (err) {
+        res.status(500).json({ error: String(err) });
+      }
+    });
+
+    initDone = true;
+  } catch (err: any) {
+    initError = err;
+    console.error("[API Init Error]", err?.code, err?.message, err?.requireStack?.join?.(" -> "));
+
+    // Expose error on all /api routes so we can diagnose it
+    app.use("/api", (_req: any, res: any) => {
+      res.status(500).json({
+        error: "API initialization failed",
+        code: err?.code,
+        message: err?.message,
+        module: err?.moduleName ?? err?.url,
+        requireStack: err?.requireStack,
+      });
+    });
   }
+})();
+
+// Block requests until init completes
+app.use(async (_req: any, _res: any, next: any) => {
+  await initPromise;
+  next();
 });
 
 export default app;
