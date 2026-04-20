@@ -484,6 +484,7 @@ export const appRouter = router({
         if (!db) return [];
 
         const { sql } = await import("drizzle-orm");
+        const canalPattern = `vendedor:${vendedor.olistId ?? vendedor.id}:%`;
         const result = await db.execute(
           sql`SELECT
                 TO_CHAR("dataPedido", 'YYYY-MM-DD') as dia,
@@ -493,15 +494,15 @@ export const appRouter = router({
               WHERE "dataPedido" >= ${input.dataInicio}
                 AND "dataPedido" <= ${input.dataFim}
                 AND status NOT IN ('cancelado', 'recusado')
-                AND canal LIKE ${`vendedor:${vendedor.olistId ?? vendedor.id}:%`}
+                AND canal LIKE ${canalPattern}
               GROUP BY dia
               ORDER BY dia`
         );
 
         const rows = result as unknown as Array<{
           dia: string;
-          total: number;
-          quantidade: number;
+          total: string;
+          quantidade: string;
         }>;
 
         return rows.map(row => ({

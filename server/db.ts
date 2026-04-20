@@ -162,14 +162,15 @@ export async function getVendasPorDia(dataInicio: Date, dataFim: Date) {
   if (!db) return [];
   try {
     const result = await db.execute(
-      sql`SELECT TO_CHAR(${pedidos.dataPedido}, 'YYYY-MM-DD') as dia, COALESCE(SUM(${pedidos.totalPedido}), 0) as total, COUNT(*) as quantidade FROM ${pedidos} WHERE ${pedidos.dataPedido} >= ${dataInicio} AND ${pedidos.dataPedido} <= ${dataFim} AND ${pedidos.status} NOT IN ('cancelado', 'recusado') GROUP BY dia ORDER BY dia`
+      sql`SELECT TO_CHAR("dataPedido", 'YYYY-MM-DD') as dia, COALESCE(SUM("totalPedido"), 0) as total, COUNT(*) as quantidade FROM pedidos WHERE "dataPedido" >= ${dataInicio} AND "dataPedido" <= ${dataFim} AND status NOT IN ('cancelado', 'recusado') GROUP BY dia ORDER BY dia`
     );
-    return (result as unknown as Array<{ dia: string; total: number; quantidade: number }>).map(r => ({
+    return (result as unknown as Array<{ dia: string; total: string; quantidade: string }>).map(r => ({
       data: r.dia,
-      total: r.total,
-      quantidade: r.quantidade,
+      total: Number(r.total),
+      quantidade: Number(r.quantidade),
     }));
-  } catch {
+  } catch (err) {
+    console.error('[getVendasPorDia] error:', err);
     return [];
   }
 }
@@ -396,24 +397,29 @@ export async function getVendasPorVendedor(dataInicio: Date, dataFim: Date) {
   if (!db) return [];
   const result = await db.execute(
     sql`SELECT
-      SPLIT_PART(${pedidos.canal}, ':', 2) as vendedor_id,
-      SPLIT_PART(${pedidos.canal}, ':', 3) as vendedor_nome,
-      COALESCE(SUM(${pedidos.totalPedido}), 0) as total_vendas,
+      SPLIT_PART(canal, ':', 2) as vendedor_id,
+      SPLIT_PART(canal, ':', 3) as vendedor_nome,
+      COALESCE(SUM("totalPedido"), 0) as total_vendas,
       COUNT(*) as quantidade_pedidos
-    FROM ${pedidos}
-    WHERE ${pedidos.dataPedido} >= ${dataInicio}
-      AND ${pedidos.dataPedido} <= ${dataFim}
-      AND ${pedidos.status} NOT IN ('cancelado', 'recusado')
-      AND ${pedidos.canal} LIKE 'vendedor:%'
+    FROM pedidos
+    WHERE "dataPedido" >= ${dataInicio}
+      AND "dataPedido" <= ${dataFim}
+      AND status NOT IN ('cancelado', 'recusado')
+      AND canal LIKE 'vendedor:%'
     GROUP BY vendedor_id, vendedor_nome
     ORDER BY total_vendas DESC`
   );
-  return result as unknown as Array<{
+  return (result as unknown as Array<{
     vendedor_id: string;
     vendedor_nome: string;
-    total_vendas: number;
-    quantidade_pedidos: number;
-  }>;
+    total_vendas: string;
+    quantidade_pedidos: string;
+  }>).map(r => ({
+    vendedor_id: r.vendedor_id,
+    vendedor_nome: r.vendedor_nome,
+    total_vendas: Number(r.total_vendas),
+    quantidade_pedidos: Number(r.quantidade_pedidos),
+  }));
 }
 
 // ─── Analytics: Inadimplência ─────────────────────────────────────────────────
@@ -421,20 +427,20 @@ export async function getInadimplencia(dataInicio?: Date, dataFim?: Date) {
   const db = await getDb();
   if (!db) return [];
   const dateFilter = dataInicio && dataFim
-    ? sql`AND ${pedidos.dataPedido} >= ${dataInicio} AND ${pedidos.dataPedido} <= ${dataFim}`
+    ? sql`AND "dataPedido" >= ${dataInicio} AND "dataPedido" <= ${dataFim}`
     : sql``;
   const result = await db.execute(
     sql`SELECT
-      ${pedidos.id}, ${pedidos.olistId}, ${pedidos.numero}, ${pedidos.clienteNome}, ${pedidos.clienteCpfCnpj},
-      ${pedidos.totalPedido}, ${pedidos.dataPedido}, ${pedidos.dataPrevEntrega},
-      ${pedidos.canal},
-      SPLIT_PART(${pedidos.canal}, ':', 2) as vendedor_id,
-      SPLIT_PART(${pedidos.canal}, ':', 3) as vendedor_nome,
-      EXTRACT(EPOCH FROM (NOW() - ${pedidos.dataPrevEntrega}))::int / 86400 as dias_atraso,
-      ${pedidos.rawData}
-    FROM ${pedidos}
-    WHERE ${pedidos.situacao} = 'Entregue'
-      AND ((${pedidos.rawData}::json->>'_pagamento_confirmado')::boolean = false OR (${pedidos.rawData}::json->>'_pagamento_confirmado') IS NULL)
+      id, "olistId", numero, "clienteNome", "clienteCpfCnpj",
+      "totalPedido", "dataPedido", "dataPrevEntrega",
+      canal,
+      SPLIT_PART(canal, ':', 2) as vendedor_id,
+      SPLIT_PART(canal, ':', 3) as vendedor_nome,
+      EXTRACT(EPOCH FROM (NOW() - "dataPrevEntrega"))::int / 86400 as dias_atraso,
+      "rawData"
+    FROM pedidos
+    WHERE situacao = 'Entregue'
+      AND (("rawData"::json->>'_pagamento_confirmado')::boolean = false OR ("rawData"::json->>'_pagamento_confirmado') IS NULL)
       ${dateFilter}
     ORDER BY dias_atraso DESC`
   );
@@ -451,24 +457,30 @@ export async function getTopClientes(dataInicio: Date, dataFim: Date, limit = 10
   if (!db) return [];
   const result = await db.execute(
     sql`SELECT
-      ${pedidos.clienteNome},
-      ${pedidos.clienteCpfCnpj},
+      "clienteNome",
+      "clienteCpfCnpj",
       COUNT(*) as total_pedidos,
-      COALESCE(SUM(${pedidos.totalPedido}), 0) as total_compras,
-      MAX(${pedidos.dataPedido}) as ultimo_pedido
-    FROM ${pedidos}
-    WHERE ${pedidos.dataPedido} >= ${dataInicio}
-      AND ${pedidos.dataPedido} <= ${dataFim}
-      AND ${pedidos.status} NOT IN ('cancelado', 'recusado')
-      AND ${pedidos.clienteNome} IS NOT NULL
-    GROUP BY ${pedidos.clienteNome}, ${pedidos.clienteCpfCnpj}
+      COALESCE(SUM("totalPedido"), 0) as total_compras,
+      MAX("dataPedido") as ultimo_pedido
+    FROM pedidos
+    WHERE "dataPedido" >= ${dataInicio}
+      AND "dataPedido" <= ${dataFim}
+      AND status NOT IN ('cancelado', 'recusado')
+      AND "clienteNome" IS NOT NULL
+    GROUP BY "clienteNome", "clienteCpfCnpj"
     ORDER BY total_compras DESC
     LIMIT ${limit}`
   );
-  return result as unknown as Array<{
+  return (result as unknown as Array<{
     clienteNome: string; clienteCpfCnpj: string;
-    total_pedidos: number; total_compras: number; ultimo_pedido: Date;
-  }>;
+    total_pedidos: string; total_compras: string; ultimo_pedido: Date;
+  }>).map(r => ({
+    clienteNome: r.clienteNome,
+    clienteCpfCnpj: r.clienteCpfCnpj,
+    total_pedidos: Number(r.total_pedidos),
+    total_compras: Number(r.total_compras),
+    ultimo_pedido: r.ultimo_pedido,
+  }));
 }
 
 // ─── Analytics: Conciliação ───────────────────────────────────────────────────
@@ -477,18 +489,18 @@ export async function getConciliacao(dataInicio: Date, dataFim: Date) {
   if (!db) return [];
   const result = await db.execute(
     sql`SELECT
-      ${pedidos.id}, ${pedidos.olistId}, ${pedidos.numero}, ${pedidos.clienteNome}, ${pedidos.clienteCpfCnpj},
-      ${pedidos.totalPedido}, ${pedidos.dataPedido}, ${pedidos.situacao},
+      id, "olistId", numero, "clienteNome", "clienteCpfCnpj",
+      "totalPedido", "dataPedido", situacao,
       CASE
-        WHEN ${pedidos.situacao} IN ('Faturado', 'Entregue e Pago', 'Pago') THEN 'pago'
-        WHEN ${pedidos.situacao} = 'Entregue' THEN 'entregue'
-        ELSE LOWER(${pedidos.situacao})
+        WHEN situacao IN ('Faturado', 'Entregue e Pago', 'Pago') THEN 'pago'
+        WHEN situacao = 'Entregue' THEN 'entregue'
+        ELSE LOWER(situacao)
       END as status
-    FROM ${pedidos}
-    WHERE ${pedidos.dataPedido} >= ${dataInicio}
-      AND ${pedidos.dataPedido} <= ${dataFim}
-      AND ${pedidos.situacao} NOT IN ('Cancelado', 'Recusado')
-    ORDER BY ${pedidos.dataPedido} DESC
+    FROM pedidos
+    WHERE "dataPedido" >= ${dataInicio}
+      AND "dataPedido" <= ${dataFim}
+      AND situacao NOT IN ('Cancelado', 'Recusado')
+    ORDER BY "dataPedido" DESC
     LIMIT 200`
   );
   return result as unknown as Array<{
