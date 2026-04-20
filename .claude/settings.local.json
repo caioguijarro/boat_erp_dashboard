@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Vercel__get_deployment_build_logs",
+      "mcp__claude_ai_Vercel__list_deployments",
+      "mcp__claude_ai_Vercel__get_project",
+      "mcp__claude_ai_Vercel__get_deployment",
+      "Bash(powershell.exe -Command \"Get-Content 'C:\\\\Users\\\\caiog\\\\AppData\\\\Local\\\\com.vercel.cli\\\\Data\\\\auth.json'\")",
+      "Bash(cmd.exe /c \"type C:\\\\Users\\\\caiog\\\\AppData\\\\Local\\\\com.vercel.cli\\\\Data\\\\auth.json\")",
+      "Bash(cmd.exe /c \"dir C:\\\\Users\\\\caiog\\\\AppData\\\\Local\\\\com.vercel.cli\\\\Data\\\\\" 2>&1)",
+      "Bash(cmd.exe /c \"type C:\\\\Users\\\\caiog\\\\AppData\\\\Roaming\\\\com.vercel.cli\\\\Data\\\\auth.json\")",
+      "Bash(cmd.exe /c \"where node && where npm && where npx\")",
+      "Bash(cmd.exe /c \"C:\\\\Users\\\\caiog\\\\AppData\\\\Roaming\\\\npm\\\\vercel.cmd whoami\")",
+      "Bash(cmd.exe /c \"C:\\\\Users\\\\caiog\\\\AppData\\\\Roaming\\\\npm\\\\vercel.cmd --version\")",
+      "Bash(cmd.exe /c \"C:\\\\Users\\\\caiog\\\\AppData\\\\Roaming\\\\npm\\\\vercel.cmd ls\")",
+      "Bash(cmd.exe /c \"C:\\\\Users\\\\caiog\\\\AppData\\\\Roaming\\\\npm\\\\vercel.cmd --version > C:\\\\Users\\\\caiog\\\\AppData\\\\Local\\\\Temp\\\\vout.txt 2>&1\")",
+      "Bash(cat)",
+      "Bash(cmd.exe /c \"C:\\\\tmp\\\\deploy.bat\")",
+      "Bash(cmd.exe /c C:\\\\\\\\tmp\\\\\\\\deploy.bat)",
+      "Bash(/c/Users/caiog/AppData/Roaming/npm/node_modules/.bin/vercel --version)",
+      "Bash(/c/Users/caiog/AppData/Roaming/npm/node.exe /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js --version)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js --version)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js whoami)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js deploy --prod --yes)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js env add ADMIN_PASSWORD production)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js env add ADMIN_PASSWORD production --value \"boat2024\" --yes)",
+      "mcp__claude_ai_Vercel__get_runtime_logs",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js logs dpl_89VZqsppoqd3df2qhzEpu3W1Jcf6 --team team_1ime1NVmVGZsb4yT4mqU5R8g)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" /c/Users/caiog/AppData/Roaming/npm/node_modules/vercel/dist/index.js inspect dpl_89VZqsppoqd3df2qhzEpu3W1Jcf6 --team team_1ime1NVmVGZsb4yT4mqU5R8g)"
+    ]
+  }
+}

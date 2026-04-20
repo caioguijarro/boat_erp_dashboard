@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(\"/c/Program Files/nodejs/node.exe\" -e \" const fs = require\\('fs'\\); const raw = fs.readFileSync\\('C:/Users/caiog/.claude/projects/c--Users-caiog-OneDrive-Documentos-GitHub-boat-erp-dashboard/68c8cf73-7471-4f97-91f8-97bbcb54103f/tool-results/mcp-claude_ai_Vercel-get_deployment_build_logs-1775936653681.txt', 'utf8'\\); const outer = JSON.parse\\(raw\\); const inner = JSON.parse\\(outer[0].text\\); // Show all events after the build command let found = false; inner.events.forEach\\(ev => { const t = ev.text || ''; if \\(t.includes\\('vite build'\\)\\) found = true; if \\(found\\) console.log\\(t.substring\\(0, 300\\)\\); }\\); \")",
+      "Bash('/c/Program Files/nodejs/node.exe' -e ':*)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" -e \" const fs = require\\('fs'\\); const raw = fs.readFileSync\\('C:/Users/caiog/.claude/projects/c--Users-caiog-OneDrive-Documentos-GitHub-boat-erp-dashboard/68c8cf73-7471-4f97-91f8-97bbcb54103f/tool-results/mcp-claude_ai_Vercel-get_deployment_build_logs-1775937032461.txt', 'utf8'\\); const outer = JSON.parse\\(raw\\); const inner = JSON.parse\\(outer[0].text\\); const events = inner.events; console.log\\('Total events:', events.length\\); // Show events after the vite build \\(after 'Built in' or after the last .js asset\\) let afterVite = false; let jsCount = 0; events.forEach\\(\\(ev, i\\) => { const t = ev.text || ''; if \\(!afterVite && /\\\\\\\\.js.*kB/.test\\(t\\)\\) jsCount++; if \\(!afterVite && jsCount > 100 && !/\\\\\\\\.js.*kB/.test\\(t\\) && t.length > 0\\) { afterVite = true; console.log\\('[event', i, ']', '['+ev.type+']', JSON.stringify\\(t.substring\\(0,400\\)\\)\\); } if \\(afterVite\\) { console.log\\('[event', i, ']', '['+ev.type+']', JSON.stringify\\(t.substring\\(0,400\\)\\)\\); } }\\); \")"
+    ]
+  }
+}
