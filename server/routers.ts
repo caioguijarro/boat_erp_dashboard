@@ -1,9 +1,9 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
-import { ENV } from "./_core/env";
-import { sdk } from "./_core/sdk";
-import { systemRouter } from "./_core/systemRouter";
-import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
+import { COOKIE_NAME, ONE_YEAR_MS } from "../shared/const.js";
+import { getSessionCookieOptions } from "./_core/cookies.js";
+import { ENV } from "./_core/env.js";
+import { sdk } from "./_core/sdk.js";
+import { systemRouter } from "./_core/systemRouter.js";
+import { protectedProcedure, publicProcedure, router } from "./_core/trpc.js";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
@@ -21,9 +21,9 @@ import {
   getMetas, upsertMeta,
   getComissoesPagas, upsertComissaoPaga, marcarComissaoPaga,
   getVendasPorVendedor, getInadimplencia, getTopClientes, getConciliacao,
-} from "./db";
-import { invokeLLM } from "./_core/llm";
-import { notifyOwner } from "./_core/notification";
+} from "./db.js";
+import { invokeLLM } from "./_core/llm.js";
+import { notifyOwner } from "./_core/notification.js";
 
 export const appRouter = router({
   system: systemRouter,
@@ -486,19 +486,19 @@ export const appRouter = router({
         const { sql } = await import("drizzle-orm");
         const result = await db.execute(
           sql`SELECT
-                DATE_FORMAT(dataPedido, '%Y-%m-%d') as dia,
-                COALESCE(SUM(totalPedido), 0) as total,
+                TO_CHAR("dataPedido", 'YYYY-MM-DD') as dia,
+                COALESCE(SUM("totalPedido"), 0) as total,
                 COUNT(*) as quantidade
               FROM pedidos
-              WHERE dataPedido >= ${input.dataInicio}
-                AND dataPedido <= ${input.dataFim}
+              WHERE "dataPedido" >= ${input.dataInicio}
+                AND "dataPedido" <= ${input.dataFim}
                 AND status NOT IN ('cancelado', 'recusado')
                 AND canal LIKE ${`vendedor:${vendedor.olistId ?? vendedor.id}:%`}
               GROUP BY dia
               ORDER BY dia`
         );
 
-        const rows = result[0] as unknown as Array<{
+        const rows = result as unknown as Array<{
           dia: string;
           total: number;
           quantidade: number;

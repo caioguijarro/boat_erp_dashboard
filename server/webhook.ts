@@ -4,8 +4,8 @@ import {
   upsertProduto, upsertPedido, upsertItemPedido,
   upsertNotaFiscal, upsertExpedicao,
   insertWebhookLog, getProdutosBaixoEstoque,
-} from "./db";
-import { notifyOwner } from "./_core/notification";
+} from "./db.js";
+import { notifyOwner } from "./_core/notification.js";
 
 export const webhookRouter = Router();
 

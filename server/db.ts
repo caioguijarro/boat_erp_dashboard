@@ -1,15 +1,17 @@
 import { and, desc, eq, gte, lte, sql, lt } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, produtos, pedidos, itensPedido, notasFiscais, expedicoes, contasReceber, contasPagar, webhookLogs, vendedores, metas, comissoesPagas } from "../drizzle/schema";
-import type { InsertProduto, InsertPedido, InsertItemPedido, InsertNotaFiscal, InsertExpedicao, InsertContaReceber, InsertContaPagar, InsertWebhookLog, InsertVendedor, InsertMeta, InsertComissaoPaga } from "../drizzle/schema";
-import { ENV } from './_core/env';
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { InsertUser, users, produtos, pedidos, itensPedido, notasFiscais, expedicoes, contasReceber, contasPagar, webhookLogs, vendedores, metas, comissoesPagas } from "../drizzle/schema.js";
+import type { InsertProduto, InsertPedido, InsertItemPedido, InsertNotaFiscal, InsertExpedicao, InsertContaReceber, InsertContaPagar, InsertWebhookLog, InsertVendedor, InsertMeta, InsertComissaoPaga } from "../drizzle/schema.js";
+import { ENV } from './_core/env.js';
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      const client = postgres(process.env.DATABASE_URL, { prepare: false });
+      _db = drizzle(client);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -41,7 +43,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     else if (user.openId === ENV.ownerOpenId) { values.role = 'admin'; updateSet.role = 'admin'; }
     if (!values.lastSignedIn) values.lastSignedIn = new Date();
     if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
+    await db.insert(users).values(values).onConflictDoUpdate({ target: users.openId, set: updateSet });
   } catch (error) { console.error("[Database] Failed to upsert user:", error); throw error; }
 }
 
@@ -57,7 +59,7 @@ export async function upsertProduto(data: InsertProduto) {
   const db = await getDb();
   if (!db) return;
   if (data.olistId) {
-    await db.insert(produtos).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+    await db.insert(produtos).values(data).onConflictDoUpdate({ target: produtos.olistId, set: { ...data, updatedAt: new Date() } });
   } else {
     await db.insert(produtos).values(data);
   }
@@ -98,7 +100,7 @@ export async function upsertPedido(data: InsertPedido) {
   const db = await getDb();
   if (!db) return;
   if (data.olistId) {
-    await db.insert(pedidos).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+    await db.insert(pedidos).values(data).onConflictDoUpdate({ target: pedidos.olistId, set: { ...data, updatedAt: new Date() } });
   } else {
     await db.insert(pedidos).values(data);
   }
@@ -140,7 +142,6 @@ export async function upsertItemPedido(data: InsertItemPedido) {
 export async function getVendasPorPeriodo(dataInicio: Date, dataFim: Date) {
   const db = await getDb();
   if (!db) return { total: 0, quantidade: 0 };
-  // Use raw SQL to avoid TiDB only_full_group_by issues
   try {
     const result = await db.select({
       total: sql<number>`COALESCE(SUM(${pedidos.totalPedido}), 0)`,
@@ -159,14 +160,11 @@ export async function getVendasPorPeriodo(dataInicio: Date, dataFim: Date) {
 export async function getVendasPorDia(dataInicio: Date, dataFim: Date) {
   const db = await getDb();
   if (!db) return [];
-  // Use raw SQL with alias in GROUP BY to satisfy TiDB only_full_group_by mode
   try {
     const result = await db.execute(
-      sql`SELECT DATE_FORMAT(${pedidos.dataPedido}, '%Y-%m-%d') as dia, COALESCE(SUM(${pedidos.totalPedido}), 0) as total, COUNT(*) as quantidade FROM ${pedidos} WHERE ${pedidos.dataPedido} >= ${dataInicio} AND ${pedidos.dataPedido} <= ${dataFim} AND ${pedidos.status} NOT IN ('cancelado', 'recusado') GROUP BY dia ORDER BY dia`
+      sql`SELECT TO_CHAR(${pedidos.dataPedido}, 'YYYY-MM-DD') as dia, COALESCE(SUM(${pedidos.totalPedido}), 0) as total, COUNT(*) as quantidade FROM ${pedidos} WHERE ${pedidos.dataPedido} >= ${dataInicio} AND ${pedidos.dataPedido} <= ${dataFim} AND ${pedidos.status} NOT IN ('cancelado', 'recusado') GROUP BY dia ORDER BY dia`
     );
-    // MySqlRawQueryResult is [RowDataPacket[], FieldPacket[]] - rows are in index 0
-    const rows = (result[0] as unknown as Array<{ dia: string; total: number; quantidade: number }>);
-    return rows.map(r => ({
+    return (result as unknown as Array<{ dia: string; total: number; quantidade: number }>).map(r => ({
       data: r.dia,
       total: r.total,
       quantidade: r.quantidade,
@@ -190,7 +188,7 @@ export async function upsertNotaFiscal(data: InsertNotaFiscal) {
   const db = await getDb();
   if (!db) return;
   if (data.olistId) {
-    await db.insert(notasFiscais).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+    await db.insert(notasFiscais).values(data).onConflictDoUpdate({ target: notasFiscais.olistId, set: { ...data, updatedAt: new Date() } });
   } else {
     await db.insert(notasFiscais).values(data);
   }
@@ -212,7 +210,7 @@ export async function upsertExpedicao(data: InsertExpedicao) {
   const db = await getDb();
   if (!db) return;
   if (data.olistId) {
-    await db.insert(expedicoes).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+    await db.insert(expedicoes).values(data).onConflictDoUpdate({ target: expedicoes.olistId, set: { ...data, updatedAt: new Date() } });
   } else {
     await db.insert(expedicoes).values(data);
   }
@@ -230,7 +228,7 @@ export async function upsertContaReceber(data: InsertContaReceber) {
   const db = await getDb();
   if (!db) return;
   if (data.olistId) {
-    await db.insert(contasReceber).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+    await db.insert(contasReceber).values(data).onConflictDoUpdate({ target: contasReceber.olistId, set: { ...data, updatedAt: new Date() } });
   } else {
     await db.insert(contasReceber).values(data);
   }
@@ -262,7 +260,7 @@ export async function upsertContaPagar(data: InsertContaPagar) {
   const db = await getDb();
   if (!db) return;
   if (data.olistId) {
-    await db.insert(contasPagar).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+    await db.insert(contasPagar).values(data).onConflictDoUpdate({ target: contasPagar.olistId, set: { ...data, updatedAt: new Date() } });
   } else {
     await db.insert(contasPagar).values(data);
   }
@@ -325,7 +323,7 @@ export async function upsertVendedor(data: InsertVendedor) {
   const db = await getDb();
   if (!db) return;
   if (data.olistId) {
-    await db.insert(vendedores).values(data).onDuplicateKeyUpdate({ set: { ...data, updatedAt: new Date() } });
+    await db.insert(vendedores).values(data).onConflictDoUpdate({ target: vendedores.olistId, set: { ...data, updatedAt: new Date() } });
   } else {
     await db.insert(vendedores).values(data);
   }
@@ -350,12 +348,11 @@ export async function getMetas(ano?: number, mes?: number) {
 export async function upsertMeta(data: InsertMeta) {
   const db = await getDb();
   if (!db) return;
-  // Upsert by ano+mes+vendedorId
   const vendedorIdVal = data.vendedorId ?? null;
   const existing = await db.execute(
-    sql`SELECT id FROM metas WHERE ano = ${data.ano} AND mes = ${data.mes} AND ${vendedorIdVal === null ? sql`vendedorId IS NULL` : sql`vendedorId = ${vendedorIdVal}`} LIMIT 1`
+    sql`SELECT id FROM metas WHERE ano = ${data.ano} AND mes = ${data.mes} AND ${vendedorIdVal === null ? sql`"vendedorId" IS NULL` : sql`"vendedorId" = ${vendedorIdVal}`} LIMIT 1`
   );
-  const rows = (existing[0] as unknown as Array<{ id: number }>);
+  const rows = existing as unknown as Array<{ id: number }>;
   if (rows.length > 0) {
     await db.update(metas).set({ valorMeta: data.valorMeta, updatedAt: new Date() }).where(eq(metas.id, rows[0].id));
   } else {
@@ -377,9 +374,9 @@ export async function upsertComissaoPaga(data: InsertComissaoPaga) {
   const db = await getDb();
   if (!db) return;
   const existing = await db.execute(
-    sql`SELECT id FROM comissoes_pagas WHERE vendedorId = ${data.vendedorId} AND ano = ${data.ano} AND mes = ${data.mes} LIMIT 1`
+    sql`SELECT id FROM comissoes_pagas WHERE "vendedorId" = ${data.vendedorId} AND ano = ${data.ano} AND mes = ${data.mes} LIMIT 1`
   );
-  const rows = (existing[0] as unknown as Array<{ id: number }>);
+  const rows = existing as unknown as Array<{ id: number }>;
   if (rows.length > 0) {
     await db.update(comissoesPagas).set({ ...data, updatedAt: new Date() }).where(eq(comissoesPagas.id, rows[0].id));
   } else {
@@ -397,67 +394,55 @@ export async function marcarComissaoPaga(id: number) {
 export async function getVendasPorVendedor(dataInicio: Date, dataFim: Date) {
   const db = await getDb();
   if (!db) return [];
-  // Extract vendedor info from canal field: "vendedor:{id}:{nome}"
   const result = await db.execute(
-    sql`SELECT 
-      SUBSTRING_INDEX(SUBSTRING_INDEX(canal, ':', 2), ':', -1) as vendedor_id,
-      SUBSTRING_INDEX(canal, ':', -1) as vendedor_nome,
-      COALESCE(SUM(totalPedido), 0) as total_vendas,
+    sql`SELECT
+      SPLIT_PART(${pedidos.canal}, ':', 2) as vendedor_id,
+      SPLIT_PART(${pedidos.canal}, ':', 3) as vendedor_nome,
+      COALESCE(SUM(${pedidos.totalPedido}), 0) as total_vendas,
       COUNT(*) as quantidade_pedidos
-    FROM pedidos
-    WHERE dataPedido >= ${dataInicio} 
-      AND dataPedido <= ${dataFim}
-      AND status NOT IN ('cancelado', 'recusado')
-      AND canal LIKE 'vendedor:%'
+    FROM ${pedidos}
+    WHERE ${pedidos.dataPedido} >= ${dataInicio}
+      AND ${pedidos.dataPedido} <= ${dataFim}
+      AND ${pedidos.status} NOT IN ('cancelado', 'recusado')
+      AND ${pedidos.canal} LIKE 'vendedor:%'
     GROUP BY vendedor_id, vendedor_nome
     ORDER BY total_vendas DESC`
   );
-  return (result[0] as unknown as Array<{
+  return result as unknown as Array<{
     vendedor_id: string;
     vendedor_nome: string;
     total_vendas: number;
     quantidade_pedidos: number;
-  }>);
+  }>;
 }
 
 // ─── Analytics: Inadimplência ─────────────────────────────────────────────────
 export async function getInadimplencia(dataInicio?: Date, dataFim?: Date) {
   const db = await getDb();
   if (!db) return [];
-  // Inadimplente: situacao = "Entregue" e pagamento não confirmado (rawData._pagamento_confirmado = false)
   const dateFilter = dataInicio && dataFim
-    ? sql`AND dataPedido >= ${dataInicio} AND dataPedido <= ${dataFim}`
+    ? sql`AND ${pedidos.dataPedido} >= ${dataInicio} AND ${pedidos.dataPedido} <= ${dataFim}`
     : sql``;
   const result = await db.execute(
-    sql`SELECT 
-      id, olistId, numero, clienteNome, clienteCpfCnpj,
-      totalPedido, dataPedido, dataPrevEntrega,
-      canal,
-      SUBSTRING_INDEX(SUBSTRING_INDEX(canal, ':', 2), ':', -1) as vendedor_id,
-      SUBSTRING_INDEX(canal, ':', -1) as vendedor_nome,
-      DATEDIFF(NOW(), dataPrevEntrega) as dias_atraso,
-      rawData
-    FROM pedidos
-    WHERE situacao = 'Entregue'
-      AND (JSON_EXTRACT(rawData, '$._pagamento_confirmado') = false OR JSON_EXTRACT(rawData, '$._pagamento_confirmado') IS NULL)
+    sql`SELECT
+      ${pedidos.id}, ${pedidos.olistId}, ${pedidos.numero}, ${pedidos.clienteNome}, ${pedidos.clienteCpfCnpj},
+      ${pedidos.totalPedido}, ${pedidos.dataPedido}, ${pedidos.dataPrevEntrega},
+      ${pedidos.canal},
+      SPLIT_PART(${pedidos.canal}, ':', 2) as vendedor_id,
+      SPLIT_PART(${pedidos.canal}, ':', 3) as vendedor_nome,
+      EXTRACT(EPOCH FROM (NOW() - ${pedidos.dataPrevEntrega}))::int / 86400 as dias_atraso,
+      ${pedidos.rawData}
+    FROM ${pedidos}
+    WHERE ${pedidos.situacao} = 'Entregue'
+      AND ((${pedidos.rawData}::json->>'_pagamento_confirmado')::boolean = false OR (${pedidos.rawData}::json->>'_pagamento_confirmado') IS NULL)
       ${dateFilter}
     ORDER BY dias_atraso DESC`
   );
-  return (result[0] as unknown as Array<{
-    id: number;
-    olistId: string;
-    numero: string;
-    clienteNome: string;
-    clienteCpfCnpj: string;
-    totalPedido: number;
-    dataPedido: Date;
-    dataPrevEntrega: Date;
-    canal: string;
-    vendedor_id: string;
-    vendedor_nome: string;
-    dias_atraso: number;
-    rawData: string;
-  }>);
+  return result as unknown as Array<{
+    id: number; olistId: string; numero: string; clienteNome: string; clienteCpfCnpj: string;
+    totalPedido: number; dataPedido: Date; dataPrevEntrega: Date; canal: string;
+    vendedor_id: string; vendedor_nome: string; dias_atraso: number; rawData: string;
+  }>;
 }
 
 // ─── Analytics: Top Clientes ──────────────────────────────────────────────────
@@ -465,59 +450,49 @@ export async function getTopClientes(dataInicio: Date, dataFim: Date, limit = 10
   const db = await getDb();
   if (!db) return [];
   const result = await db.execute(
-    sql`SELECT 
-      clienteNome,
-      clienteCpfCnpj,
+    sql`SELECT
+      ${pedidos.clienteNome},
+      ${pedidos.clienteCpfCnpj},
       COUNT(*) as total_pedidos,
-      COALESCE(SUM(totalPedido), 0) as total_compras,
-      MAX(dataPedido) as ultimo_pedido
-    FROM pedidos
-    WHERE dataPedido >= ${dataInicio}
-      AND dataPedido <= ${dataFim}
-      AND status NOT IN ('cancelado', 'recusado')
-      AND clienteNome IS NOT NULL
-    GROUP BY clienteNome, clienteCpfCnpj
+      COALESCE(SUM(${pedidos.totalPedido}), 0) as total_compras,
+      MAX(${pedidos.dataPedido}) as ultimo_pedido
+    FROM ${pedidos}
+    WHERE ${pedidos.dataPedido} >= ${dataInicio}
+      AND ${pedidos.dataPedido} <= ${dataFim}
+      AND ${pedidos.status} NOT IN ('cancelado', 'recusado')
+      AND ${pedidos.clienteNome} IS NOT NULL
+    GROUP BY ${pedidos.clienteNome}, ${pedidos.clienteCpfCnpj}
     ORDER BY total_compras DESC
     LIMIT ${limit}`
   );
-  return (result[0] as unknown as Array<{
-    clienteNome: string;
-    clienteCpfCnpj: string;
-    total_pedidos: number;
-    total_compras: number;
-    ultimo_pedido: Date;
-  }>);
+  return result as unknown as Array<{
+    clienteNome: string; clienteCpfCnpj: string;
+    total_pedidos: number; total_compras: number; ultimo_pedido: Date;
+  }>;
 }
 
-// ─// ─── Analytics: Conciliação ───────────────────────────────────────────────
+// ─── Analytics: Conciliação ───────────────────────────────────────────────────
 export async function getConciliacao(dataInicio: Date, dataFim: Date) {
   const db = await getDb();
   if (!db) return [];
   const result = await db.execute(
-    sql`SELECT 
-      id, olistId, numero, clienteNome, clienteCpfCnpj,
-      totalPedido, dataPedido, situacao,
-      CASE 
-        WHEN situacao IN ('Faturado', 'Entregue e Pago', 'Pago') THEN 'pago'
-        WHEN situacao = 'Entregue' THEN 'entregue'
-        ELSE LOWER(situacao)
+    sql`SELECT
+      ${pedidos.id}, ${pedidos.olistId}, ${pedidos.numero}, ${pedidos.clienteNome}, ${pedidos.clienteCpfCnpj},
+      ${pedidos.totalPedido}, ${pedidos.dataPedido}, ${pedidos.situacao},
+      CASE
+        WHEN ${pedidos.situacao} IN ('Faturado', 'Entregue e Pago', 'Pago') THEN 'pago'
+        WHEN ${pedidos.situacao} = 'Entregue' THEN 'entregue'
+        ELSE LOWER(${pedidos.situacao})
       END as status
-    FROM pedidos
-    WHERE dataPedido >= ${dataInicio}
-      AND dataPedido <= ${dataFim}
-      AND situacao NOT IN ('Cancelado', 'Recusado')
-    ORDER BY dataPedido DESC
+    FROM ${pedidos}
+    WHERE ${pedidos.dataPedido} >= ${dataInicio}
+      AND ${pedidos.dataPedido} <= ${dataFim}
+      AND ${pedidos.situacao} NOT IN ('Cancelado', 'Recusado')
+    ORDER BY ${pedidos.dataPedido} DESC
     LIMIT 200`
   );
-  return (result[0] as unknown as Array<{
-    id: number;
-    olistId: string;
-    numero: string;
-    clienteNome: string;
-    clienteCpfCnpj: string;
-    totalPedido: number;
-    dataPedido: Date;
-    situacao: string;
-    status: string;
-  }>);
+  return result as unknown as Array<{
+    id: number; olistId: string; numero: string; clienteNome: string; clienteCpfCnpj: string;
+    totalPedido: number; dataPedido: Date; situacao: string; status: string;
+  }>;
 }

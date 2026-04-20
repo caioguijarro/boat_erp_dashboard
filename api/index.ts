@@ -49,7 +49,8 @@ const initPromise = (async () => {
 
     app.get("/api/cron/sync-pedidos", async (req: any, res: any) => {
       try {
-        const result = await syncPedidos(2);
+        const dias = parseInt(req.query.dias as string) || 2;
+        const result = await syncPedidos(dias);
         res.json(result);
       } catch (err) {
         res.status(500).json({ error: String(err) });

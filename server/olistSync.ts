@@ -6,11 +6,11 @@
  * - Vendedores: synced from pedidos automatically
  */
 
-import { upsertProduto, upsertPedido, upsertItemPedido, insertWebhookLog } from "./db";
-import { getDb } from "./db";
-import { vendedores } from "../drizzle/schema";
+import { upsertProduto, upsertPedido, upsertItemPedido, insertWebhookLog } from "./db.js";
+import { getDb } from "./db.js";
+import { vendedores } from "../drizzle/schema.js";
 import { eq } from "drizzle-orm";
-import { ENV } from "./_core/env";
+import { ENV } from "./_core/env.js";
 
 const OLIST_API_BASE = "https://api.tiny.com.br/api2";
 const TOKEN = ENV.olistApiToken;
