@@ -162,7 +162,7 @@ export async function getVendasPorDia(dataInicio: Date, dataFim: Date) {
   if (!db) return [];
   try {
     const result = await db.execute(
-      sql`SELECT TO_CHAR("dataPedido", 'YYYY-MM-DD') as dia, COALESCE(SUM("totalPedido"), 0) as total, COUNT(*) as quantidade FROM pedidos WHERE "dataPedido" >= ${dataInicio} AND "dataPedido" <= ${dataFim} AND status NOT IN ('cancelado', 'recusado') GROUP BY dia ORDER BY dia`
+      sql`SELECT TO_CHAR("dataPedido", 'YYYY-MM-DD') as dia, COALESCE(SUM("totalPedido"), 0) as total, COUNT(*) as quantidade FROM pedidos WHERE "dataPedido" >= ${dataInicio.toISOString()} AND "dataPedido" <= ${dataFim.toISOString()} AND status NOT IN ('cancelado', 'recusado') GROUP BY dia ORDER BY dia`
     );
     return (result as unknown as Array<{ dia: string; total: string; quantidade: string }>).map(r => ({
       data: r.dia,
@@ -402,8 +402,8 @@ export async function getVendasPorVendedor(dataInicio: Date, dataFim: Date) {
       COALESCE(SUM("totalPedido"), 0) as total_vendas,
       COUNT(*) as quantidade_pedidos
     FROM pedidos
-    WHERE "dataPedido" >= ${dataInicio}
-      AND "dataPedido" <= ${dataFim}
+    WHERE "dataPedido" >= ${dataInicio.toISOString()}
+      AND "dataPedido" <= ${dataFim.toISOString()}
       AND status NOT IN ('cancelado', 'recusado')
       AND canal LIKE 'vendedor:%'
     GROUP BY vendedor_id, vendedor_nome
@@ -427,7 +427,7 @@ export async function getInadimplencia(dataInicio?: Date, dataFim?: Date) {
   const db = await getDb();
   if (!db) return [];
   const dateFilter = dataInicio && dataFim
-    ? sql`AND "dataPedido" >= ${dataInicio} AND "dataPedido" <= ${dataFim}`
+    ? sql`AND "dataPedido" >= ${dataInicio.toISOString()} AND "dataPedido" <= ${dataFim.toISOString()}`
     : sql``;
   const result = await db.execute(
     sql`SELECT
@@ -463,8 +463,8 @@ export async function getTopClientes(dataInicio: Date, dataFim: Date, limit = 10
       COALESCE(SUM("totalPedido"), 0) as total_compras,
       MAX("dataPedido") as ultimo_pedido
     FROM pedidos
-    WHERE "dataPedido" >= ${dataInicio}
-      AND "dataPedido" <= ${dataFim}
+    WHERE "dataPedido" >= ${dataInicio.toISOString()}
+      AND "dataPedido" <= ${dataFim.toISOString()}
       AND status NOT IN ('cancelado', 'recusado')
       AND "clienteNome" IS NOT NULL
     GROUP BY "clienteNome", "clienteCpfCnpj"
@@ -497,8 +497,8 @@ export async function getConciliacao(dataInicio: Date, dataFim: Date) {
         ELSE LOWER(situacao)
       END as status
     FROM pedidos
-    WHERE "dataPedido" >= ${dataInicio}
-      AND "dataPedido" <= ${dataFim}
+    WHERE "dataPedido" >= ${dataInicio.toISOString()}
+      AND "dataPedido" <= ${dataFim.toISOString()}
       AND situacao NOT IN ('Cancelado', 'Recusado')
     ORDER BY "dataPedido" DESC
     LIMIT 200`

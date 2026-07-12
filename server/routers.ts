@@ -491,8 +491,8 @@ export const appRouter = router({
                 COALESCE(SUM("totalPedido"), 0) as total,
                 COUNT(*) as quantidade
               FROM pedidos
-              WHERE "dataPedido" >= ${input.dataInicio}
-                AND "dataPedido" <= ${input.dataFim}
+              WHERE "dataPedido" >= ${input.dataInicio.toISOString()}
+                AND "dataPedido" <= ${input.dataFim.toISOString()}
                 AND status NOT IN ('cancelado', 'recusado')
                 AND canal LIKE ${canalPattern}
               GROUP BY dia
