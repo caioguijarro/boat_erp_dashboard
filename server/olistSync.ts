@@ -11,8 +11,8 @@ import { getDb } from "./db.js";
 import { vendedores } from "../drizzle/schema.js";
 import { eq } from "drizzle-orm";
 import { ENV } from "./_core/env.js";
+import { olistPost } from "./olistClient.js";
 
-const OLIST_API_BASE = "https://api.tiny.com.br/api2";
 const TOKEN = ENV.olistApiToken;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -41,29 +41,6 @@ function mapSituacao(situacao: string): string {
     "Devolvido": "cancelado",
   };
   return map[situacao] || situacao.toLowerCase().replace(/\s+/g, "_");
-}
-
-async function olistPost(endpoint: string, params: Record<string, string>): Promise<any> {
-  if (!TOKEN) throw new Error("OLIST_API_TOKEN not configured");
-  const body = new URLSearchParams({ token: TOKEN, formato: "JSON", ...params });
-  const res = await fetch(`${OLIST_API_BASE}/${endpoint}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
-  if (!res.ok) throw new Error(`Olist API error: ${res.status} ${res.statusText}`);
-  
-  let data;
-  try {
-    data = await res.json();
-  } catch (err) {
-    throw new Error("Olist API error: Invalid JSON response");
-  }
-
-  if (data?.retorno?.status === "Erro") {
-    throw new Error(`Olist API error: ${JSON.stringify(data.retorno.erros)}`);
-  }
-  return data?.retorno;
 }
 
 // ─── Sync Vendedores ──────────────────────────────────────────────────────────

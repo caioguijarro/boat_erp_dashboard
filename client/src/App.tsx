@@ -13,6 +13,7 @@ import Vendas from "./pages/Vendas";
 import Vendedores from "./pages/Vendedores";
 import Inadimplencia from "./pages/Inadimplencia";
 import Clientes from "./pages/Clientes";
+import Crm from "./pages/Crm";
 
 import DashboardLayout from "@/components/DashboardLayout";
 
@@ -32,6 +33,7 @@ function Router() {
             <Route path="/vendedores" component={Vendedores} />
             <Route path="/inadimplencia" component={Inadimplencia} />
             <Route path="/clientes" component={Clientes} />
+            <Route path="/crm" component={Crm} />
             <Route path="/404" component={NotFound} />
             <Route component={NotFound} />
           </Switch>

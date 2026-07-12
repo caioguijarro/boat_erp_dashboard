@@ -21,9 +21,15 @@ import {
   getMetas, upsertMeta,
   getComissoesPagas, upsertComissaoPaga, marcarComissaoPaga,
   getVendasPorVendedor, getInadimplencia, getTopClientes, getConciliacao,
+  // CRM de recompra
+  getCrmClientes, getCrmTarefas, getCrmContatoByKey,
+  upsertCrmContato, updateCrmContatoStatus, appendCrmNota, agendarCrmFollowup,
 } from "./db.js";
+import { writeBackContato, buscarTelefoneTiny } from "./crm.js";
 import { invokeLLM } from "./_core/llm.js";
 import { notifyOwner } from "./_core/notification.js";
+
+const crmStatusEnum = z.enum(["a_contatar", "contatado", "respondeu", "venda_fechada", "sem_interesse"]);
 
 export const appRouter = router({
   system: systemRouter,
@@ -547,6 +553,110 @@ export const appRouter = router({
       }))
       .query(async ({ input }) => {
         return getVendasPorDia(input.dataInicio, input.dataFim);
+      }),
+  }),
+
+  // ─── CRM de Recompra ──────────────────────────────────────────────────────
+  crm: router({
+    // Clientes consolidados, já com bucket de recência e overlay de contato.
+    listar: protectedProcedure.query(async () => getCrmClientes()),
+
+    // Follow-ups vencidos/de hoje ordenados por LTV desc ("Minhas tarefas").
+    tarefas: protectedProcedure.query(async () => getCrmTarefas()),
+
+    atualizarStatus: protectedProcedure
+      .input(z.object({
+        clienteKey: z.string(),
+        clienteCpfCnpj: z.string().nullable().optional(),
+        status: crmStatusEnum,
+      }))
+      .mutation(async ({ input }) => {
+        await updateCrmContatoStatus(input.clienteKey, input.status, input.clienteCpfCnpj);
+        return { sucesso: true };
+      }),
+
+    adicionarNota: protectedProcedure
+      .input(z.object({
+        clienteKey: z.string(),
+        clienteCpfCnpj: z.string().nullable().optional(),
+        nota: z.string().min(1),
+      }))
+      .mutation(async ({ input }) => {
+        await appendCrmNota(input.clienteKey, input.nota, input.clienteCpfCnpj);
+        return { sucesso: true };
+      }),
+
+    agendarFollowup: protectedProcedure
+      .input(z.object({
+        clienteKey: z.string(),
+        clienteCpfCnpj: z.string().nullable().optional(),
+        data: z.date(),
+      }))
+      .mutation(async ({ input }) => {
+        await agendarCrmFollowup(input.clienteKey, input.data, input.clienteCpfCnpj);
+        return { sucesso: true };
+      }),
+
+    // Edição de contato com optimistic update local + write-back no Olist.
+    editarContato: protectedProcedure
+      .input(z.object({
+        clienteKey: z.string(),
+        clienteCpfCnpj: z.string().nullable().optional(),
+        nome: z.string().nullable().optional(),
+        telefone: z.string().nullable().optional(),
+        whatsapp: z.string().nullable().optional(),
+        email: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const existente = await getCrmContatoByKey(input.clienteKey);
+
+        // 1) Grava local imediatamente (optimistic update).
+        await upsertCrmContato({
+          clienteKey: input.clienteKey,
+          clienteCpfCnpj: input.clienteCpfCnpj ?? existente?.clienteCpfCnpj ?? undefined,
+          telefone: input.telefone ?? undefined,
+          whatsapp: input.whatsapp ?? undefined,
+          email: input.email ?? undefined,
+        });
+
+        // 2) Write-back no Olist (só toca no Tiny se a flag estiver ligada).
+        const resultado = await writeBackContato({
+          clienteKey: input.clienteKey,
+          cpfCnpj: input.clienteCpfCnpj ?? existente?.clienteCpfCnpj ?? null,
+          olistContatoId: existente?.olistContatoId ?? null,
+          nome: input.nome ?? null,
+          changes: {
+            telefone: input.telefone ?? undefined,
+            whatsapp: input.whatsapp ?? undefined,
+            email: input.email ?? undefined,
+          },
+        });
+
+        // Persiste o id do contato do Tiny quando descoberto/criado.
+        if (resultado.contatoId && resultado.contatoId !== existente?.olistContatoId) {
+          await upsertCrmContato({ clienteKey: input.clienteKey, olistContatoId: resultado.contatoId });
+        }
+
+        return { local: true, olist: resultado.olist, error: resultado.error };
+      }),
+
+    // Enriquece o telefone via API Tiny (contatos.pesquisa.php) e cacheia local.
+    enriquecerTelefone: protectedProcedure
+      .input(z.object({
+        clienteKey: z.string(),
+        clienteCpfCnpj: z.string().nullable().optional(),
+        nome: z.string().nullable().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const telefone = await buscarTelefoneTiny(input.clienteCpfCnpj, input.nome);
+        if (telefone) {
+          await upsertCrmContato({
+            clienteKey: input.clienteKey,
+            clienteCpfCnpj: input.clienteCpfCnpj ?? undefined,
+            telefone,
+          });
+        }
+        return { telefone };
       }),
   }),
 });

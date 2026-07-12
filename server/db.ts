@@ -1,8 +1,8 @@
 import { and, desc, eq, gte, lte, sql, lt } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { InsertUser, users, produtos, pedidos, itensPedido, notasFiscais, expedicoes, contasReceber, contasPagar, webhookLogs, vendedores, metas, comissoesPagas } from "../drizzle/schema.js";
-import type { InsertProduto, InsertPedido, InsertItemPedido, InsertNotaFiscal, InsertExpedicao, InsertContaReceber, InsertContaPagar, InsertWebhookLog, InsertVendedor, InsertMeta, InsertComissaoPaga } from "../drizzle/schema.js";
+import { InsertUser, users, produtos, pedidos, itensPedido, notasFiscais, expedicoes, contasReceber, contasPagar, webhookLogs, vendedores, metas, comissoesPagas, crmContatos } from "../drizzle/schema.js";
+import type { InsertProduto, InsertPedido, InsertItemPedido, InsertNotaFiscal, InsertExpedicao, InsertContaReceber, InsertContaPagar, InsertWebhookLog, InsertVendedor, InsertMeta, InsertComissaoPaga, InsertCrmContato, CrmContato } from "../drizzle/schema.js";
 import { ENV } from './_core/env.js';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -507,4 +507,216 @@ export async function getConciliacao(dataInicio: Date, dataFim: Date) {
     id: number; olistId: string; numero: string; clienteNome: string; clienteCpfCnpj: string;
     totalPedido: number; dataPedido: Date; situacao: string; status: string;
   }>;
+}
+
+// ─── CRM de Recompra ──────────────────────────────────────────────────────────
+
+export type RecenciaBucket = "ativos" | "d30_59" | "d60_89" | "d90_119" | "d120_179" | "d180_plus";
+
+/** Classifica o cliente numa faixa de recência a partir dos dias sem comprar. */
+export function recenciaBucket(dias: number): RecenciaBucket {
+  if (dias < 30) return "ativos";
+  if (dias < 60) return "d30_59";
+  if (dias < 90) return "d60_89";
+  if (dias < 120) return "d90_119";
+  if (dias < 180) return "d120_179";
+  return "d180_plus";
+}
+
+export type CrmCliente = {
+  clienteKey: string;
+  clienteNome: string;
+  clienteCpfCnpj: string | null;
+  email: string | null;
+  telefone: string | null;
+  whatsapp: string | null;
+  totalPedidos: number;
+  ltv: number;
+  ticketMedio: number;
+  ultimaCompra: Date | null;
+  diasDesdeUltima: number;
+  bucket: RecenciaBucket;
+  status: CrmContato["status"];
+  notas: string | null;
+  ultimoContato: Date | null;
+  proximoFollowup: Date | null;
+  olistContatoId: string | null;
+};
+
+/**
+ * Consolida os clientes a partir de `pedidos`, agrupando por CPF/CNPJ (fallback:
+ * nome normalizado), calculando última compra, dias desde a última, nº de
+ * pedidos, LTV e ticket médio. Extrai o telefone do `rawData` do pedido mais
+ * recente e sobrepõe os dados de gestão (status/notas/telefone/followup) da
+ * tabela `crm_contatos`.
+ */
+export async function getCrmClientes(): Promise<CrmCliente[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.execute(
+    sql`
+      WITH base AS (
+        SELECT
+          COALESCE(NULLIF(TRIM("clienteCpfCnpj"), ''),
+                   'nome:' || LOWER(REGEXP_REPLACE(TRIM(COALESCE("clienteNome", '')), '\s+', ' ', 'g'))) AS cliente_key,
+          "clienteNome", "clienteCpfCnpj", "clienteEmail", "totalPedido", "dataPedido", "rawData"
+        FROM pedidos
+        WHERE status NOT IN ('cancelado', 'recusado')
+          AND "clienteNome" IS NOT NULL
+      ),
+      agg AS (
+        SELECT
+          cliente_key,
+          MAX("clienteNome") AS cliente_nome,
+          MAX("clienteCpfCnpj") AS cliente_cpf_cnpj,
+          MAX("clienteEmail") AS cliente_email,
+          COUNT(*) AS total_pedidos,
+          COALESCE(SUM("totalPedido"), 0) AS ltv,
+          MAX("dataPedido") AS ultima_compra
+        FROM base
+        GROUP BY cliente_key
+      ),
+      tel AS (
+        SELECT DISTINCT ON (cliente_key)
+          cliente_key,
+          NULLIF(TRIM(COALESCE("rawData"::json->'cliente'->>'celular', "rawData"::json->'cliente'->>'fone', '')), '') AS telefone
+        FROM base
+        WHERE "rawData" IS NOT NULL
+        ORDER BY cliente_key, "dataPedido" DESC NULLS LAST
+      )
+      SELECT
+        a.cliente_key,
+        a.cliente_nome,
+        a.cliente_cpf_cnpj,
+        a.cliente_email,
+        a.total_pedidos,
+        a.ltv,
+        a.ultima_compra,
+        t.telefone AS telefone_pedido,
+        (EXTRACT(EPOCH FROM (NOW() - a.ultima_compra)) / 86400)::int AS dias_desde_ultima,
+        c."telefone" AS c_telefone,
+        c."whatsapp" AS c_whatsapp,
+        c."email" AS c_email,
+        c."status" AS c_status,
+        c."notas" AS c_notas,
+        c."ultimoContato" AS c_ultimo_contato,
+        c."proximoFollowup" AS c_proximo_followup,
+        c."olistContatoId" AS c_olist_contato_id
+      FROM agg a
+      LEFT JOIN tel t ON t.cliente_key = a.cliente_key
+      LEFT JOIN crm_contatos c ON c."clienteKey" = a.cliente_key
+      ORDER BY a.ultima_compra DESC NULLS LAST
+    `
+  );
+
+  const rows = result as unknown as Array<{
+    cliente_key: string;
+    cliente_nome: string;
+    cliente_cpf_cnpj: string | null;
+    cliente_email: string | null;
+    total_pedidos: string | number;
+    ltv: string | number;
+    ultima_compra: Date | null;
+    telefone_pedido: string | null;
+    dias_desde_ultima: string | number | null;
+    c_telefone: string | null;
+    c_whatsapp: string | null;
+    c_email: string | null;
+    c_status: CrmContato["status"] | null;
+    c_notas: string | null;
+    c_ultimo_contato: Date | null;
+    c_proximo_followup: Date | null;
+    c_olist_contato_id: string | null;
+  }>;
+
+  return rows.map((r) => {
+    const totalPedidos = Number(r.total_pedidos) || 0;
+    const ltv = Number(r.ltv) || 0;
+    const dias = r.dias_desde_ultima != null ? Number(r.dias_desde_ultima) : 0;
+    return {
+      clienteKey: r.cliente_key,
+      clienteNome: r.cliente_nome ?? "Desconhecido",
+      clienteCpfCnpj: r.cliente_cpf_cnpj,
+      email: r.c_email ?? r.cliente_email,
+      telefone: r.c_telefone ?? r.telefone_pedido,
+      whatsapp: r.c_whatsapp ?? r.c_telefone ?? r.telefone_pedido,
+      totalPedidos,
+      ltv,
+      ticketMedio: totalPedidos > 0 ? ltv / totalPedidos : 0,
+      ultimaCompra: r.ultima_compra,
+      diasDesdeUltima: dias,
+      bucket: recenciaBucket(dias),
+      status: r.c_status ?? "a_contatar",
+      notas: r.c_notas,
+      ultimoContato: r.c_ultimo_contato,
+      proximoFollowup: r.c_proximo_followup,
+      olistContatoId: r.c_olist_contato_id,
+    };
+  });
+}
+
+/** Follow-ups vencidos ou de hoje, ordenados por LTV desc (maiores clientes primeiro). */
+export async function getCrmTarefas(): Promise<CrmCliente[]> {
+  const clientes = await getCrmClientes();
+  const agora = new Date();
+  return clientes
+    .filter((c) => c.proximoFollowup != null && new Date(c.proximoFollowup) <= agora)
+    .sort((a, b) => b.ltv - a.ltv);
+}
+
+export async function getCrmContatoByKey(clienteKey: string): Promise<CrmContato | null> {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(crmContatos).where(eq(crmContatos.clienteKey, clienteKey)).limit(1);
+  return result[0] ?? null;
+}
+
+function cleanUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
+/** Upsert em crm_contatos pela chave do cliente, atualizando só os campos informados. */
+export async function upsertCrmContato(data: InsertCrmContato): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const { clienteKey, ...rest } = data;
+  const set = cleanUndefined({ ...rest, updatedAt: new Date() });
+  await db
+    .insert(crmContatos)
+    .values(data)
+    .onConflictDoUpdate({ target: crmContatos.clienteKey, set });
+}
+
+export async function updateCrmContatoStatus(
+  clienteKey: string,
+  status: CrmContato["status"],
+  clienteCpfCnpj?: string | null,
+): Promise<void> {
+  await upsertCrmContato({ clienteKey, clienteCpfCnpj: clienteCpfCnpj ?? undefined, status });
+}
+
+/** Anexa uma nota (com timestamp) ao histórico e marca o último contato como agora. */
+export async function appendCrmNota(clienteKey: string, nota: string, clienteCpfCnpj?: string | null): Promise<void> {
+  const existente = await getCrmContatoByKey(clienteKey);
+  const carimbo = new Date().toLocaleString("pt-BR");
+  const linha = `[${carimbo}] ${nota.trim()}`;
+  const notas = existente?.notas ? `${existente.notas}\n${linha}` : linha;
+  await upsertCrmContato({
+    clienteKey,
+    clienteCpfCnpj: clienteCpfCnpj ?? existente?.clienteCpfCnpj ?? undefined,
+    notas,
+    ultimoContato: new Date(),
+  });
+}
+
+export async function agendarCrmFollowup(
+  clienteKey: string,
+  data: Date,
+  clienteCpfCnpj?: string | null,
+): Promise<void> {
+  await upsertCrmContato({ clienteKey, clienteCpfCnpj: clienteCpfCnpj ?? undefined, proximoFollowup: data });
 }

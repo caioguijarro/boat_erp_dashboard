@@ -13,6 +13,7 @@ const envSchema = z.object({
   BUILT_IN_FORGE_API_URL: z.string().optional().default(""),
   BUILT_IN_FORGE_API_KEY: z.string().optional().default(""),
   OLIST_API_TOKEN: z.string().optional().default(""),
+  OLIST_WRITEBACK_ENABLED: z.string().optional().default(""),
   ADMIN_PASSWORD: z.string().optional().default(""),
 });
 
@@ -36,5 +37,6 @@ export const ENV = {
   forgeApiUrl: _env.data.BUILT_IN_FORGE_API_URL,
   forgeApiKey: _env.data.BUILT_IN_FORGE_API_KEY,
   olistApiToken: _env.data.OLIST_API_TOKEN,
+  olistWritebackEnabled: _env.data.OLIST_WRITEBACK_ENABLED.trim().toLowerCase() === "true",
   adminPassword: _env.data.ADMIN_PASSWORD,
 };
