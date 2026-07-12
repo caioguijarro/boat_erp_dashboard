@@ -236,3 +236,31 @@ export const webhookLogs = pgTable("webhook_logs", {
 
 export type WebhookLog = typeof webhookLogs.$inferSelect;
 export type InsertWebhookLog = typeof webhookLogs.$inferInsert;
+
+// ─── CRM de Recompra ─────────────────────────────────────────────────────────
+// Camada de relacionamento sobre os clientes consolidados a partir de `pedidos`.
+// A recência é calculada dinamicamente; esta tabela guarda apenas o estado de
+// gestão do contato (status, notas, follow-up, telefone/e-mail para write-back).
+export const crmContatos = pgTable("crm_contatos", {
+  id: serial("id").primaryKey(),
+  // Chave do cliente: CPF/CNPJ, com fallback "nome:<nome normalizado>".
+  clienteKey: varchar("clienteKey", { length: 128 }).notNull().unique(),
+  clienteCpfCnpj: varchar("clienteCpfCnpj", { length: 32 }),
+  // Id do contato no Tiny/Olist, quando conhecido (usado no write-back).
+  olistContatoId: varchar("olistContatoId", { length: 64 }),
+  telefone: varchar("telefone", { length: 32 }),
+  whatsapp: varchar("whatsapp", { length: 32 }),
+  email: varchar("email", { length: 320 }),
+  status: text("status")
+    .$type<"a_contatar" | "contatado" | "respondeu" | "venda_fechada" | "sem_interesse">()
+    .default("a_contatar")
+    .notNull(),
+  notas: text("notas"),
+  ultimoContato: timestamp("ultimoContato"),
+  proximoFollowup: timestamp("proximoFollowup"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type CrmContato = typeof crmContatos.$inferSelect;
+export type InsertCrmContato = typeof crmContatos.$inferInsert;
