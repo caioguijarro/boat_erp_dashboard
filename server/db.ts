@@ -543,22 +543,84 @@ export type CrmCliente = {
   olistContatoId: string | null;
 };
 
+/** Normaliza o nome do cliente para comparação (lower + trim + colapso de espaços). */
+function normalizarNome(nome: string | null | undefined): string {
+  return (nome ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 /**
- * Consolida os clientes a partir de `pedidos`, agrupando por CPF/CNPJ (fallback:
- * nome normalizado), calculando última compra, dias desde a última, nº de
- * pedidos, LTV e ticket médio. Extrai o telefone do `rawData` do pedido mais
- * recente e sobrepõe os dados de gestão (status/notas/telefone/followup) da
- * tabela `crm_contatos`.
+ * Garante um card por cliente real (item 1): mescla registros keyados só por
+ * nome (pedidos sem CPF/CNPJ) no registro keyado por CPF/CNPJ de mesmo nome,
+ * quando existir. Registros com CPF já vêm únicos do banco (a chave normaliza o
+ * CPF para dígitos), então dois cadastros do Tiny nunca viram o mesmo card.
  */
-export async function getCrmClientes(): Promise<CrmCliente[]> {
+export function consolidarClientes(list: CrmCliente[]): CrmCliente[] {
+  const cpfPorNome = new Map<string, CrmCliente>();
+  const result: CrmCliente[] = [];
+
+  // 1) Registros com CPF/CNPJ entram no resultado e indexam por nome.
+  for (const c of list) {
+    if (!c.clienteKey.startsWith("nome:")) {
+      result.push(c);
+      const n = normalizarNome(c.clienteNome);
+      if (n && !cpfPorNome.has(n)) cpfPorNome.set(n, c);
+    }
+  }
+
+  // 2) Registros só-nome: mescla no registro CPF de mesmo nome, se houver.
+  for (const c of list) {
+    if (!c.clienteKey.startsWith("nome:")) continue;
+    const alvo = cpfPorNome.get(normalizarNome(c.clienteNome));
+    if (!alvo) {
+      result.push(c);
+      continue;
+    }
+    alvo.totalPedidos += c.totalPedidos;
+    alvo.ltv += c.ltv;
+    alvo.ticketMedio = alvo.totalPedidos > 0 ? alvo.ltv / alvo.totalPedidos : 0;
+    const aMs = alvo.ultimaCompra ? new Date(alvo.ultimaCompra).getTime() : 0;
+    const cMs = c.ultimaCompra ? new Date(c.ultimaCompra).getTime() : 0;
+    if (cMs > aMs) {
+      alvo.ultimaCompra = c.ultimaCompra;
+      alvo.diasDesdeUltima = c.diasDesdeUltima;
+      alvo.bucket = c.bucket;
+    }
+    alvo.telefone = alvo.telefone ?? c.telefone;
+    alvo.whatsapp = alvo.whatsapp ?? c.whatsapp;
+    alvo.email = alvo.email ?? c.email;
+  }
+
+  return result;
+}
+
+/**
+ * Consolida os clientes a partir de `pedidos`, agrupando por CPF/CNPJ (dígitos,
+ * fallback: nome normalizado), calculando última compra, dias desde a última,
+ * nº de pedidos, LTV e ticket médio. Extrai o telefone do `rawData` do pedido
+ * mais recente e sobrepõe os dados de gestão (status/notas/telefone/followup)
+ * da tabela `crm_contatos`.
+ *
+ * `opts.ltvDesde` restringe a janela de LTV/ticket/nº de pedidos (item 4:
+ * "período do LTV"); a recência (dias desde a última compra) permanece
+ * calculada sobre todo o histórico, para o cliente não sair do quadro.
+ */
+export async function getCrmClientes(opts?: { ltvDesde?: Date }): Promise<CrmCliente[]> {
   const db = await getDb();
   if (!db) return [];
+
+  // Filtro da janela do LTV (vazio = todo o histórico). Datas como ISO string.
+  const periodo = opts?.ltvDesde
+    ? sql`FILTER (WHERE "dataPedido" >= ${opts.ltvDesde.toISOString()})`
+    : sql``;
+
   const result = await db.execute(
     sql`
       WITH base AS (
         SELECT
-          COALESCE(NULLIF(TRIM("clienteCpfCnpj"), ''),
-                   'nome:' || LOWER(REGEXP_REPLACE(TRIM(COALESCE("clienteNome", '')), '\s+', ' ', 'g'))) AS cliente_key,
+          COALESCE(
+            NULLIF(REGEXP_REPLACE(COALESCE("clienteCpfCnpj", ''), '[^0-9]', '', 'g'), ''),
+            'nome:' || LOWER(REGEXP_REPLACE(TRIM(COALESCE("clienteNome", '')), '\s+', ' ', 'g'))
+          ) AS cliente_key,
           "clienteNome", "clienteCpfCnpj", "clienteEmail", "totalPedido", "dataPedido", "rawData"
         FROM pedidos
         WHERE status NOT IN ('cancelado', 'recusado')
@@ -570,8 +632,8 @@ export async function getCrmClientes(): Promise<CrmCliente[]> {
           MAX("clienteNome") AS cliente_nome,
           MAX("clienteCpfCnpj") AS cliente_cpf_cnpj,
           MAX("clienteEmail") AS cliente_email,
-          COUNT(*) AS total_pedidos,
-          COALESCE(SUM("totalPedido"), 0) AS ltv,
+          COUNT(*) ${periodo} AS total_pedidos,
+          COALESCE(SUM("totalPedido") ${periodo}, 0) AS ltv,
           MAX("dataPedido") AS ultima_compra
         FROM base
         GROUP BY cliente_key
@@ -629,7 +691,7 @@ export async function getCrmClientes(): Promise<CrmCliente[]> {
     c_olist_contato_id: string | null;
   }>;
 
-  return rows.map((r) => {
+  const mapped = rows.map((r) => {
     const totalPedidos = Number(r.total_pedidos) || 0;
     const ltv = Number(r.ltv) || 0;
     const dias = r.dias_desde_ultima != null ? Number(r.dias_desde_ultima) : 0;
@@ -651,8 +713,10 @@ export async function getCrmClientes(): Promise<CrmCliente[]> {
       ultimoContato: r.c_ultimo_contato,
       proximoFollowup: r.c_proximo_followup,
       olistContatoId: r.c_olist_contato_id,
-    };
+    } satisfies CrmCliente;
   });
+
+  return consolidarClientes(mapped);
 }
 
 /** Follow-ups vencidos ou de hoje, ordenados por LTV desc (maiores clientes primeiro). */
@@ -669,6 +733,16 @@ export async function getCrmContatoByKey(clienteKey: string): Promise<CrmContato
   if (!db) return null;
   const result = await db.select().from(crmContatos).where(eq(crmContatos.clienteKey, clienteKey)).limit(1);
   return result[0] ?? null;
+}
+
+/** Contatos do CRM que já têm telefone/WhatsApp preenchido (para backfill no Tiny). */
+export async function getCrmContatosComTelefone(): Promise<CrmContato[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(crmContatos).where(
+    sql`(${crmContatos.telefone} IS NOT NULL AND ${crmContatos.telefone} <> '')
+        OR (${crmContatos.whatsapp} IS NOT NULL AND ${crmContatos.whatsapp} <> '')`
+  );
 }
 
 function cleanUndefined<T extends Record<string, unknown>>(obj: T): Partial<T> {
