@@ -4,7 +4,7 @@ import type { TrpcContext } from "./_core/context";
 import { ENV } from "./_core/env";
 import { olistPostWithRetry } from "./olistClient";
 import {
-  getCrmClientes, getCrmTarefas, getCrmContatoByKey,
+  getCrmClientes, getCrmTarefas, getCrmContatoByKey, getCrmContatosComTelefone,
   upsertCrmContato, updateCrmContatoStatus, appendCrmNota, agendarCrmFollowup,
 } from "./db";
 
@@ -15,6 +15,7 @@ vi.mock("./db", () => ({
   getCrmClientes: vi.fn().mockResolvedValue([]),
   getCrmTarefas: vi.fn().mockResolvedValue([]),
   getCrmContatoByKey: vi.fn().mockResolvedValue(null),
+  getCrmContatosComTelefone: vi.fn().mockResolvedValue([]),
   upsertCrmContato: vi.fn().mockResolvedValue(undefined),
   updateCrmContatoStatus: vi.fn().mockResolvedValue(undefined),
   appendCrmNota: vi.fn().mockResolvedValue(undefined),
@@ -112,6 +113,40 @@ describe("crm.tarefas", () => {
     const result = await caller().crm.tarefas();
     expect(getCrmTarefas).toHaveBeenCalledOnce();
     expect(result).toEqual(fake);
+  });
+});
+
+describe("crm.listar — período do LTV", () => {
+  it("sem período consulta o histórico todo (ltvDesde undefined)", async () => {
+    await caller().crm.listar(undefined);
+    expect(getCrmClientes).toHaveBeenCalledWith({ ltvDesde: undefined });
+  });
+
+  it("com periodoLtvDias passa uma data de corte", async () => {
+    await caller().crm.listar({ periodoLtvDias: 90 });
+    const arg = vi.mocked(getCrmClientes).mock.calls.at(-1)?.[0];
+    expect(arg?.ltvDesde).toBeInstanceOf(Date);
+    const diffDias = (Date.now() - (arg!.ltvDesde as Date).getTime()) / 86_400_000;
+    expect(Math.round(diffDias)).toBe(90);
+  });
+});
+
+describe("crm.sincronizarTelefones", () => {
+  it("empurra ao Tiny os contatos com telefone e conta os resultados", async () => {
+    ENV.olistWritebackEnabled = true;
+    vi.mocked(getCrmContatosComTelefone).mockResolvedValueOnce([
+      { clienteKey: "111", clienteCpfCnpj: "111", olistContatoId: "1", telefone: "(13) 90000-0000", whatsapp: null, email: null },
+    ] as any);
+    vi.mocked(olistPostWithRetry).mockImplementation(async (endpoint: string) => {
+      if (endpoint === "contato.obter.php") return { contato: { id: "1", nome: "X", fone: "old" } };
+      if (endpoint === "contato.alterar.php") return { registros: { registro: { id: "1" } } };
+      return {};
+    });
+
+    const res = await caller().crm.sincronizarTelefones();
+    expect(res.total).toBe(1);
+    expect(res.updated).toBe(1);
+    expect(res.errors).toBe(0);
   });
 });
 

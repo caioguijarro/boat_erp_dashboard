@@ -19,7 +19,7 @@ import {
 import { toast } from "sonner";
 import {
   MessageCircle, StickyNote, Pencil, CalendarClock, ShoppingCart, DollarSign,
-  Repeat, ListTodo, Clock, Phone,
+  Repeat, ListTodo, Clock, Phone, Search, ArrowUpDown, RefreshCw,
 } from "lucide-react";
 
 type CrmCliente = inferRouterOutputs<AppRouter>["crm"]["listar"][number];
@@ -45,6 +45,22 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 
 const STATUS_OPTIONS = Object.keys(STATUS_CONFIG);
 
+const SORT_OPTIONS = [
+  { key: "dias", label: "Dias sem comprar" },
+  { key: "ltv", label: "LTV" },
+  { key: "ticket", label: "Ticket médio" },
+  { key: "ultima", label: "Última compra" },
+] as const;
+type SortKey = (typeof SORT_OPTIONS)[number]["key"];
+
+const PERIODOS_LTV = [
+  { label: "Tudo", dias: 0 },
+  { label: "30 dias", dias: 30 },
+  { label: "90 dias", dias: 90 },
+  { label: "6 meses", dias: 180 },
+  { label: "12 meses", dias: 365 },
+] as const;
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 0 }).format(value);
 }
@@ -69,9 +85,16 @@ function waLink(cliente: CrmCliente): string | null {
 // ─── Página ───────────────────────────────────────────────────────────────────
 
 export default function Crm() {
-  const { data: clientes = [], isLoading, refetch: refetchClientes } = trpc.crm.listar.useQuery(undefined, {
-    staleTime: 2 * 60 * 1000,
-  });
+  const [busca, setBusca] = useState("");
+  const [statusFiltro, setStatusFiltro] = useState<string>("todos");
+  const [periodoLtv, setPeriodoLtv] = useState(0);
+  const [sortBy, setSortBy] = useState<SortKey>("dias");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const { data: clientes = [], isLoading, refetch: refetchClientes } = trpc.crm.listar.useQuery(
+    periodoLtv ? { periodoLtvDias: periodoLtv } : undefined,
+    { staleTime: 2 * 60 * 1000 },
+  );
   const { data: tarefas = [], refetch: refetchTarefas } = trpc.crm.tarefas.useQuery(undefined, {
     staleTime: 2 * 60 * 1000,
   });
@@ -81,16 +104,47 @@ export default function Crm() {
     refetchTarefas();
   };
 
+  const sincronizar = trpc.crm.sincronizarTelefones.useMutation({
+    onSuccess: (r) => {
+      toast(
+        `Tiny sincronizado: ${r.updated} atualizado(s), ${r.created} criado(s)` +
+        (r.errors ? `, ${r.errors} com erro` : "") + `.`,
+      );
+      refetchAll();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  // Filtro + sort aplicados à lista — o resultado vale em cada coluna do quadro.
+  const visiveis = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    const termoDigits = termo.replace(/\D/g, "");
+    const filtrados = clientes.filter((c) => {
+      if (statusFiltro !== "todos" && c.status !== statusFiltro) return false;
+      if (!termo) return true;
+      const nomeMatch = c.clienteNome.toLowerCase().includes(termo);
+      const cpfMatch = termoDigits.length > 0 && (c.clienteCpfCnpj ?? "").replace(/\D/g, "").includes(termoDigits);
+      const telMatch = termoDigits.length > 0 && (c.whatsapp ?? c.telefone ?? "").replace(/\D/g, "").includes(termoDigits);
+      return nomeMatch || cpfMatch || telMatch;
+    });
+    const valor = (c: CrmCliente): number => {
+      switch (sortBy) {
+        case "ltv": return c.ltv;
+        case "ticket": return c.ticketMedio;
+        case "ultima": return c.ultimaCompra ? new Date(c.ultimaCompra).getTime() : 0;
+        default: return c.diasDesdeUltima;
+      }
+    };
+    return [...filtrados].sort((a, b) => (sortDir === "desc" ? valor(b) - valor(a) : valor(a) - valor(b)));
+  }, [clientes, busca, statusFiltro, sortBy, sortDir]);
+
   const porBucket = useMemo(() => {
     const map: Record<string, CrmCliente[]> = {};
     for (const b of BUCKETS) map[b.key] = [];
-    for (const c of clientes) {
-      (map[c.bucket] ??= []).push(c);
-    }
-    // Dentro de cada coluna, prioriza maior LTV.
-    for (const k of Object.keys(map)) map[k].sort((a, b) => b.ltv - a.ltv);
+    // Ordem herdada de `visiveis` (já ordenada) → cada coluna respeita o sort.
+    for (const c of visiveis) (map[c.bucket] ??= []).push(c);
     return map;
-  }, [clientes]);
+  }, [visiveis]);
 
   return (
     <div className="p-6 space-y-6">
@@ -103,6 +157,17 @@ export default function Crm() {
             Clientes organizados por recência de compra — gerencie status, notas e follow-ups.
           </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2"
+          disabled={sincronizar.isPending}
+          onClick={() => sincronizar.mutate()}
+          title="Empurra ao Tiny os telefones/WhatsApp já cadastrados no CRM"
+        >
+          <RefreshCw className={`h-4 w-4 ${sincronizar.isPending ? "animate-spin" : ""}`} />
+          Sincronizar telefones com o Tiny
+        </Button>
       </div>
 
       <Tabs defaultValue="kanban" className="w-full">
@@ -119,12 +184,81 @@ export default function Crm() {
         </TabsList>
 
         {/* ── Kanban ── */}
-        <TabsContent value="kanban" className="mt-4">
+        <TabsContent value="kanban" className="mt-4 space-y-4">
+          {/* Filtros / ordenação / busca */}
+          <div className="flex flex-wrap items-end gap-3 rounded-lg border border-border bg-card/50 p-3">
+            <div className="flex-1 min-w-[200px] space-y-1">
+              <Label className="text-xs text-muted-foreground">Buscar cliente</Label>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Nome, CPF/CNPJ ou telefone..."
+                  className="pl-8 h-9"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Status</Label>
+              <Select value={statusFiltro} onValueChange={setStatusFiltro}>
+                <SelectTrigger className="h-9 w-[150px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os status</SelectItem>
+                  {STATUS_OPTIONS.map((s) => (
+                    <SelectItem key={s} value={s}>{STATUS_CONFIG[s].label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Período do LTV</Label>
+              <Select value={String(periodoLtv)} onValueChange={(v) => setPeriodoLtv(Number(v))}>
+                <SelectTrigger className="h-9 w-[130px]"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PERIODOS_LTV.map((p) => (
+                    <SelectItem key={p.dias} value={String(p.dias)}>{p.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">Ordenar por</Label>
+              <div className="flex gap-1">
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                  <SelectTrigger className="h-9 w-[170px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SORT_OPTIONS.map((s) => (
+                      <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 px-2 gap-1"
+                  onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+                  title={sortDir === "desc" ? "Maior primeiro" : "Menor primeiro"}
+                >
+                  <ArrowUpDown className="h-4 w-4" />
+                  {sortDir === "desc" ? "Maior" : "Menor"}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           {isLoading ? (
             <div className="py-16 text-center text-muted-foreground">Carregando clientes...</div>
           ) : clientes.length === 0 ? (
             <div className="py-16 text-center text-muted-foreground">
               Nenhum cliente encontrado. Os clientes aparecem automaticamente conforme os pedidos são sincronizados.
+            </div>
+          ) : visiveis.length === 0 ? (
+            <div className="py-16 text-center text-muted-foreground">
+              Nenhum cliente para os filtros selecionados.
             </div>
           ) : (
             <div className="overflow-x-auto pb-4">
@@ -443,8 +577,7 @@ function ClienteCard({
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  A alteração é gravada localmente na hora. O envio ao Olist depende de
-                  <code className="mx-1">OLIST_WRITEBACK_ENABLED</code>.
+                  A alteração é gravada na hora e enviada automaticamente ao cadastro do cliente no Tiny.
                 </p>
               </div>
               <DialogFooter className="gap-2">

@@ -37,6 +37,8 @@ export const ENV = {
   forgeApiUrl: _env.data.BUILT_IN_FORGE_API_URL,
   forgeApiKey: _env.data.BUILT_IN_FORGE_API_KEY,
   olistApiToken: _env.data.OLIST_API_TOKEN,
-  olistWritebackEnabled: _env.data.OLIST_WRITEBACK_ENABLED.trim().toLowerCase() === "true",
+  // Write-back do CRM no Tiny fica SEMPRE ativo por padrão; só desliga se
+  // OLIST_WRITEBACK_ENABLED for explicitamente "false".
+  olistWritebackEnabled: _env.data.OLIST_WRITEBACK_ENABLED.trim().toLowerCase() !== "false",
   adminPassword: _env.data.ADMIN_PASSWORD,
 };

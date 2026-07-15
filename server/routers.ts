@@ -22,7 +22,7 @@ import {
   getComissoesPagas, upsertComissaoPaga, marcarComissaoPaga,
   getVendasPorVendedor, getInadimplencia, getTopClientes, getConciliacao,
   // CRM de recompra
-  getCrmClientes, getCrmTarefas, getCrmContatoByKey,
+  getCrmClientes, getCrmTarefas, getCrmContatoByKey, getCrmContatosComTelefone,
   upsertCrmContato, updateCrmContatoStatus, appendCrmNota, agendarCrmFollowup,
 } from "./db.js";
 import { writeBackContato, buscarTelefoneTiny } from "./crm.js";
@@ -559,10 +559,41 @@ export const appRouter = router({
   // ─── CRM de Recompra ──────────────────────────────────────────────────────
   crm: router({
     // Clientes consolidados, já com bucket de recência e overlay de contato.
-    listar: protectedProcedure.query(async () => getCrmClientes()),
+    // `periodoLtvDias` restringe a janela de LTV/ticket/nº de pedidos (0/omitido = tudo).
+    listar: protectedProcedure
+      .input(z.object({ periodoLtvDias: z.number().int().min(1).max(3650).optional() }).optional())
+      .query(async ({ input }) => {
+        const ltvDesde = input?.periodoLtvDias
+          ? new Date(Date.now() - input.periodoLtvDias * 24 * 60 * 60 * 1000)
+          : undefined;
+        return getCrmClientes({ ltvDesde });
+      }),
 
     // Follow-ups vencidos/de hoje ordenados por LTV desc ("Minhas tarefas").
     tarefas: protectedProcedure.query(async () => getCrmTarefas()),
+
+    // Empurra ao Tiny os telefones/WhatsApp já cadastrados no CRM (backfill).
+    sincronizarTelefones: protectedProcedure.mutation(async () => {
+      const contatos = await getCrmContatosComTelefone();
+      let updated = 0, created = 0, skipped = 0, errors = 0;
+      for (const c of contatos) {
+        const res = await writeBackContato({
+          clienteKey: c.clienteKey,
+          cpfCnpj: c.clienteCpfCnpj,
+          olistContatoId: c.olistContatoId,
+          nome: null,
+          changes: { telefone: c.telefone, whatsapp: c.whatsapp, email: c.email },
+        });
+        if (res.olist === "updated") updated++;
+        else if (res.olist === "created") created++;
+        else if (res.olist === "skipped") skipped++;
+        else errors++;
+        if (res.contatoId && res.contatoId !== c.olistContatoId) {
+          await upsertCrmContato({ clienteKey: c.clienteKey, olistContatoId: res.contatoId });
+        }
+      }
+      return { total: contatos.length, updated, created, skipped, errors };
+    }),
 
     atualizarStatus: protectedProcedure
       .input(z.object({
