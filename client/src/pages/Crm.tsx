@@ -28,11 +28,11 @@ type CrmCliente = inferRouterOutputs<AppRouter>["crm"]["listar"][number];
 
 const BUCKETS: { key: string; label: string; sub: string; readOnly?: boolean; accent: string }[] = [
   { key: "ativos", label: "Ativos", sub: "menos de 30 dias", readOnly: true, accent: "text-green-500" },
-  { key: "d30_59", label: "30–59 dias", sub: "atenção", accent: "text-lime-500" },
-  { key: "d60_89", label: "60–89 dias", sub: "reengajar", accent: "text-amber-500" },
-  { key: "d90_119", label: "90–119 dias", sub: "em risco", accent: "text-orange-500" },
-  { key: "d120_179", label: "120–179 dias", sub: "frios", accent: "text-red-400" },
-  { key: "d180_plus", label: "180+ dias", sub: "inativos", accent: "text-red-500" },
+  { key: "d30_59", label: "30 a 59 dias", sub: "de olho", accent: "text-lime-500" },
+  { key: "d60_89", label: "60 a 89 dias", sub: "hora de chamar", accent: "text-amber-500" },
+  { key: "d90_119", label: "90 a 119 dias", sub: "esfriando", accent: "text-orange-500" },
+  { key: "d120_179", label: "120 a 179 dias", sub: "quase sumindo", accent: "text-red-400" },
+  { key: "d180_plus", label: "180+ dias", sub: "sumidos", accent: "text-red-500" },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
@@ -77,8 +77,8 @@ function waLink(cliente: CrmCliente): string | null {
   const phone = digits.startsWith("55") ? digits : `55${digits}`;
   const ultima = cliente.ultimaCompra ? new Date(cliente.ultimaCompra).toLocaleDateString("pt-BR") : null;
   const msg = ultima
-    ? `Olá ${primeiroNome(cliente.clienteNome)}! Aqui é da Boat Beer Company 🍻. Vi que sua última compra com a gente foi em ${ultima} e queria saber se está tudo certo — posso te ajudar com um novo pedido?`
-    : `Olá ${primeiroNome(cliente.clienteNome)}! Aqui é da Boat Beer Company 🍻. Posso te ajudar com um novo pedido?`;
+    ? `Fala ${primeiroNome(cliente.clienteNome)}! Aqui é da tripulação Boat Beer 🍻 Tua última compra com a gente foi em ${ultima} e o estoque já deve tá pedindo reforço, né? Me diz que eu já monto teu pedido. 🚤`
+    : `Fala ${primeiroNome(cliente.clienteNome)}! Aqui é da tripulação Boat Beer 🍻 Bora reabastecer o estoque? Me diz que eu já monto teu pedido. 🚤`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 }
 
@@ -154,7 +154,7 @@ export default function Crm() {
             <Repeat className="h-6 w-6 text-primary" /> CRM de Recompra
           </h1>
           <p className="text-muted-foreground text-sm">
-            Clientes organizados por recência de compra — gerencie status, notas e follow-ups.
+            A tripulação organizada por recência de compra. Gerencie status, notas e follow-ups.
           </p>
         </div>
         <Button
@@ -305,12 +305,12 @@ export default function Crm() {
           {tarefas.length === 0 ? (
             <div className="py-16 text-center text-muted-foreground flex flex-col items-center gap-2">
               <ListTodo className="h-8 w-8 opacity-30" />
-              <p className="text-sm">Nenhum follow-up vencido ou para hoje. 🎉</p>
+              <p className="text-sm">Tá tudo em dia por aqui, nenhum follow-up vencido. 🎉</p>
             </div>
           ) : (
             <div className="space-y-3 max-w-3xl">
               <p className="text-sm text-muted-foreground">
-                {tarefas.length} follow-up(s) vencidos/de hoje — ordenados pelos maiores LTV.
+                {tarefas.length} follow-up(s) vencidos ou de hoje, ordenados pelos maiores LTV.
               </p>
               {tarefas.map((c) => (
                 <ClienteCard key={c.clienteKey} cliente={c} onChanged={refetchAll} showFollowupDate />
@@ -476,7 +476,7 @@ function ClienteCard({
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Notas — {cliente.clienteNome}</DialogTitle>
+                <DialogTitle>Notas de {cliente.clienteNome}</DialogTitle>
               </DialogHeader>
               {cliente.notas && (
                 <div className="max-h-40 overflow-y-auto text-xs whitespace-pre-wrap bg-muted/50 rounded-md p-3 text-muted-foreground">
@@ -545,7 +545,7 @@ function ClienteCard({
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Editar contato — {cliente.clienteNome}</DialogTitle>
+                <DialogTitle>Editar contato de {cliente.clienteNome}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <div className="space-y-1">
